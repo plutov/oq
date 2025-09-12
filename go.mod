@@ -1,4 +1,4 @@
-module oq
+module github.com/plutov/oq
 
 go 1.25.1
 

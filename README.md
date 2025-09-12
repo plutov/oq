@@ -30,6 +30,10 @@ Both JSON and YAML formats are supported.
 
 ## Installation
 
+```bash
+go install github.com/plutov/oq@latest
+```
+
 ### From Source
 
 ```bash
