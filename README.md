@@ -14,10 +14,7 @@ curl https://api.example.com/openapi.json | oq
 
 ### Keyboard Shortcuts
 
-- **↑/↓ or k/j** - Navigate up/down through items
-- **Tab** - Switch between Endpoints and Components views
-- **Enter or Space** - Toggle fold/unfold for endpoint and component details
-- **q or Ctrl+C** - Quit the application
+Press `?` to see the help screen with all available keyboard shortcuts.
 
 ## OpenAPI Support
 

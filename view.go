@@ -7,29 +7,43 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const (
+	colorGreen       = "#10B981"
+	colorBlue        = "#3B82F6"
+	colorYellow      = "#F59E0B"
+	colorRed         = "#EF4444"
+	colorPurple      = "#8B5CF6"
+	colorGray        = "#6B7280"
+	colorThemePurple = "#7C3AED"
+	colorBackground  = "#374151"
+	colorDetailGray  = "#9CA3AF"
+	colorFooterText  = "#000000"
+	colorWhite       = "#FFFFFF"
+)
+
 func (m Model) renderEndpoints() string {
 	var s strings.Builder
 
 	methodColors := map[string]lipgloss.Color{
-		"GET":     "#10B981",
-		"POST":    "#3B82F6",
-		"PUT":     "#F59E0B",
-		"DELETE":  "#EF4444",
-		"PATCH":   "#8B5CF6",
-		"HEAD":    "#6B7280",
-		"OPTIONS": "#6B7280",
-		"TRACE":   "#6B7280",
+		"GET":     colorGreen,
+		"POST":    colorBlue,
+		"PUT":     colorYellow,
+		"DELETE":  colorRed,
+		"PATCH":   colorPurple,
+		"HEAD":    colorGray,
+		"OPTIONS": colorGray,
+		"TRACE":   colorGray,
 	}
 
 	for i, ep := range m.endpoints {
 		style := lipgloss.NewStyle()
 		if i == m.cursor {
-			style = style.Background(lipgloss.Color("#374151"))
+			style = style.Background(lipgloss.Color(colorBackground))
 		}
 
 		methodColor := methodColors[ep.method]
 		if methodColor == "" {
-			methodColor = "#6B7280"
+			methodColor = colorGray
 		}
 
 		methodStyle := lipgloss.NewStyle().
@@ -54,7 +68,7 @@ func (m Model) renderEndpoints() string {
 			details := formatEndpointDetails(ep)
 			detailStyle := lipgloss.NewStyle().
 				PaddingLeft(2).
-				Foreground(lipgloss.Color("#9CA3AF"))
+				Foreground(lipgloss.Color(colorDetailGray))
 			s.WriteString(detailStyle.Render(details))
 			s.WriteString("\n")
 		}
@@ -67,23 +81,23 @@ func (m Model) renderComponents() string {
 	var s strings.Builder
 
 	componentColors := map[string]lipgloss.Color{
-		"Schema":         "#10B981",
-		"RequestBody":    "#3B82F6",
-		"Response":       "#F59E0B",
-		"Parameter":      "#8B5CF6",
-		"Header":         "#EF4444",
-		"SecurityScheme": "#6B7280",
+		"Schema":         colorGreen,
+		"RequestBody":    colorBlue,
+		"Response":       colorYellow,
+		"Parameter":      colorPurple,
+		"Header":         colorRed,
+		"SecurityScheme": colorGray,
 	}
 
 	for i, comp := range m.components {
 		style := lipgloss.NewStyle()
 		if i == m.cursor {
-			style = style.Background(lipgloss.Color("#374151"))
+			style = style.Background(lipgloss.Color(colorBackground))
 		}
 
 		componentColor := componentColors[comp.compType]
 		if componentColor == "" {
-			componentColor = "#6B7280"
+			componentColor = colorGray
 		}
 
 		typeStyle := lipgloss.NewStyle().
@@ -111,7 +125,7 @@ func (m Model) renderComponents() string {
 		if !comp.folded {
 			detailStyle := lipgloss.NewStyle().
 				PaddingLeft(2).
-				Foreground(lipgloss.Color("#9CA3AF"))
+				Foreground(lipgloss.Color(colorDetailGray))
 			s.WriteString(detailStyle.Render(comp.details))
 			s.WriteString("\n")
 		}
@@ -123,17 +137,17 @@ func (m Model) renderComponents() string {
 func (m Model) renderHeader() string {
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("#7C3AED")).
+		Foreground(lipgloss.Color(colorThemePurple)).
 		PaddingBottom(1)
 
 	tabStyle := lipgloss.NewStyle().
 		Padding(0, 2).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#666"))
+		BorderForeground(lipgloss.Color(colorGray))
 
 	activeTabStyle := tabStyle.
-		BorderForeground(lipgloss.Color("#7C3AED")).
-		Foreground(lipgloss.Color("#7C3AED"))
+		BorderForeground(lipgloss.Color(colorThemePurple)).
+		Foreground(lipgloss.Color(colorThemePurple))
 
 	var header strings.Builder
 	header.WriteString(titleStyle.Render("oq - OpenAPI Spec Viewer"))
@@ -157,16 +171,19 @@ func (m Model) renderHeader() string {
 }
 
 func (m Model) renderFooter() string {
-	helpText := "Press 'tab' to switch views, 'enter' to toggle details, 'q' to quit"
+	schemaInfo := fmt.Sprintf("%s v%s", m.doc.Info.Title, m.doc.Info.Version)
+
+	helpText := "Press '?' for help"
+	if m.showHelp {
+		helpText = ""
+	}
 
 	footerStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("#6B7280")).
-		Foreground(lipgloss.Color("#000000")).
+		Background(lipgloss.Color(colorGray)).
+		Foreground(lipgloss.Color(colorFooterText)).
 		Padding(0, 1).
 		Width(m.width).
 		Align(lipgloss.Left)
-
-	schemaInfo := fmt.Sprintf("%s v%s", m.doc.Info.Title, m.doc.Info.Version)
 
 	availableWidth := m.width - len(schemaInfo) - 4
 	if len(helpText) > availableWidth {
@@ -179,4 +196,57 @@ func (m Model) renderFooter() string {
 		schemaInfo)
 
 	return "\n" + footerStyle.Render(footerContent)
+}
+
+func (m Model) renderHelpModal() string {
+	keyStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(colorBlue)).
+		Bold(true)
+
+	textStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(colorWhite))
+
+	helpData := [][]string{
+		{"↑/k", "Move up"},
+		{"↓/j", "Move down"},
+		{"Tab", "Switch views"},
+		{"Enter/Space", "Toggle details"},
+		{"?", "Toggle help"},
+		{"Esc/q", "Close help"},
+		{"Ctrl+C", "Quit"},
+	}
+
+	// Find max width for first column
+	maxKeyWidth := 0
+	for _, row := range helpData {
+		if len(row[0]) > maxKeyWidth {
+			maxKeyWidth = len(row[0])
+		}
+	}
+
+	var helpItems []string
+	for _, row := range helpData {
+		key := keyStyle.Render(fmt.Sprintf("%-*s", maxKeyWidth, row[0]))
+		desc := textStyle.Render(" " + row[1])
+		helpItems = append(helpItems, key+desc)
+	}
+
+	helpContent := strings.Join(helpItems, "\n")
+
+	modalStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(colorThemePurple)).
+		Padding(1, 2).
+		Width(32)
+
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color(colorThemePurple)).
+		Align(lipgloss.Center).
+		Width(28)
+
+	title := titleStyle.Render("Help")
+	modal := modalStyle.Render(title + "\n\n" + helpContent)
+
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
 }

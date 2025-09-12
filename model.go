@@ -37,6 +37,7 @@ type Model struct {
 	mode       viewMode
 	width      int
 	height     int
+	showHelp   bool
 }
 
 func NewModel(doc *openapi3.T) Model {
@@ -51,6 +52,7 @@ func NewModel(doc *openapi3.T) Model {
 		mode:       viewEndpoints,
 		width:      80,
 		height:     24,
+		showHelp:   false,
 	}
 }
 
@@ -67,37 +69,55 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
-			return m, tea.Quit
+			if m.showHelp {
+				m.showHelp = false
+			} else {
+				return m, tea.Quit
+			}
+
+		case "?":
+			m.showHelp = !m.showHelp
+
+		case "esc":
+			if m.showHelp {
+				m.showHelp = false
+			}
 
 		case "tab":
-			if m.mode == viewEndpoints {
-				m.mode = viewComponents
-			} else {
-				m.mode = viewEndpoints
+			if !m.showHelp {
+				if m.mode == viewEndpoints {
+					m.mode = viewComponents
+				} else {
+					m.mode = viewEndpoints
+				}
+				m.cursor = 0
 			}
-			m.cursor = 0
 
 		case "up", "k":
-			if m.cursor > 0 {
+			if !m.showHelp && m.cursor > 0 {
 				m.cursor--
 			}
 
 		case "down", "j":
-			maxItems := 0
-			if m.mode == viewEndpoints {
-				maxItems = len(m.endpoints) - 1
-			} else {
-				maxItems = len(m.components) - 1
-			}
-			if m.cursor < maxItems {
-				m.cursor++
+			if !m.showHelp {
+				maxItems := 0
+				if m.mode == viewEndpoints {
+					maxItems = len(m.endpoints) - 1
+				} else {
+					maxItems = len(m.components) - 1
+				}
+				if m.cursor < maxItems {
+					m.cursor++
+				}
 			}
 
 		case "enter", " ":
-			if m.mode == viewEndpoints && m.cursor < len(m.endpoints) {
-				m.endpoints[m.cursor].folded = !m.endpoints[m.cursor].folded
-			} else if m.mode == viewComponents && m.cursor < len(m.components) {
-				m.components[m.cursor].folded = !m.components[m.cursor].folded
+			if !m.showHelp {
+				if m.mode == viewEndpoints && m.cursor < len(m.endpoints) {
+					m.endpoints[m.cursor].folded = !m.endpoints[m.cursor].folded
+				} else if m.mode == viewComponents && m.cursor < len(m.components) {
+					m.components[m.cursor].folded = !m.components[m.cursor].folded
+				}
 			}
 		}
 	}
@@ -134,5 +154,11 @@ func (m Model) View() string {
 
 	s.WriteString(footer)
 
-	return s.String()
+	baseView := s.String()
+
+	if m.showHelp {
+		return m.renderHelpModal()
+	}
+
+	return baseView
 }
