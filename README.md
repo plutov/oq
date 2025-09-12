@@ -1,6 +1,6 @@
 # oq
 
-<p align="center"><img src=".github/images/preview.gif" width="500" alt="oq preview"></p>
+<p align="center"><img src="preview.gif" width="500" alt="oq preview"></p>
 
 A terminal-based OpenAPI Spec (OAS) viewer and processor built with Go and Bubble Tea.
 
