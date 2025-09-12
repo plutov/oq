@@ -34,7 +34,7 @@ Both JSON and YAML formats are supported.
 go install github.com/plutov/oq@latest
 ```
 
-### From Source
+### From source
 
 ```bash
 git clone git@github.com:plutov/oq.git
