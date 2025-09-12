@@ -1,0 +1,86 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Simple Store API",
+    "version": "1.0.0",
+    "description": "A minimal store API demonstrating OpenAPI 3.1 features"
+  },
+  "servers": [
+    {
+      "url": "https://api.store.com/v1",
+      "description": "Production server"
+    }
+  ],
+  "paths": {
+    "/products": {
+      "get": {
+        "summary": "List products",
+        "description": "Get a list of available products",
+        "operationId": "listProducts",
+        "responses": {
+          "200": {
+            "description": "Products retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Product"
+                  }
+                },
+                "examples": {
+                  "products": {
+                    "summary": "Sample products",
+                    "value": [
+                      {
+                        "id": "1",
+                        "name": "Laptop",
+                        "price": 999.99,
+                        "available": true
+                      },
+                      {
+                        "id": "2", 
+                        "name": "Mouse",
+                        "price": 29.99,
+                        "available": false
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Product": {
+        "type": "object",
+        "required": ["id", "name", "price"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Product identifier"
+          },
+          "name": {
+            "type": "string",
+            "description": "Product name"
+          },
+          "price": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "description": "Product price"
+          },
+          "available": {
+            "type": "boolean",
+            "default": true,
+            "description": "Product availability"
+          }
+        }
+      }
+    }
+  }
+}

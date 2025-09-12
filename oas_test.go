@@ -392,6 +392,157 @@ func TestFormatEndpointDetails(t *testing.T) {
 	}
 }
 
+// JSON test data for OpenAPI 3.0
+const openapi30JSON = `{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Test API JSON",
+    "version": "1.0.0",
+    "description": "A test API for JSON format"
+  },
+  "paths": {
+    "/users": {
+      "get": {
+        "summary": "List users",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/User"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "User": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string"}
+        }
+      }
+    }
+  }
+}`
+
+// JSON test data for OpenAPI 3.1
+const openapi31JSON = `{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Test API JSON 3.1",
+    "version": "1.0.0",
+    "description": "A test API for JSON format with OpenAPI 3.1"
+  },
+  "paths": {
+    "/products": {
+      "get": {
+        "summary": "List products",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Product"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Product": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string"},
+          "price": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          }
+        }
+      }
+    }
+  }
+}`
+
+func TestLoadJSONFormat(t *testing.T) {
+	tests := []struct {
+		name     string
+		jsonSpec string
+		version  string
+		title    string
+	}{
+		{
+			name:     "OpenAPI 3.0 JSON",
+			jsonSpec: openapi30JSON,
+			version:  "3.0.3",
+			title:    "Test API JSON",
+		},
+		{
+			name:     "OpenAPI 3.1 JSON",
+			jsonSpec: openapi31JSON,
+			version:  "3.1.0",
+			title:    "Test API JSON 3.1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			loader := openapi3.NewLoader()
+			doc, err := loader.LoadFromData([]byte(tt.jsonSpec))
+			if err != nil {
+				t.Fatalf("Failed to load JSON spec: %v", err)
+			}
+
+			if doc.OpenAPI != tt.version {
+				t.Errorf("Expected OpenAPI version %s, got %s", tt.version, doc.OpenAPI)
+			}
+
+			if doc.Info.Title != tt.title {
+				t.Errorf("Expected title '%s', got %s", tt.title, doc.Info.Title)
+			}
+
+			// Test validation
+			err = doc.Validate(context.Background())
+			if err != nil {
+				t.Fatalf("JSON spec validation failed: %v", err)
+			}
+
+			// Test that we can extract endpoints
+			endpoints := extractEndpoints(doc)
+			if len(endpoints) == 0 {
+				t.Error("No endpoints extracted from JSON spec")
+			}
+
+			// Test that we can extract components
+			components := extractComponents(doc)
+			if len(components) == 0 {
+				t.Error("No components extracted from JSON spec")
+			}
+		})
+	}
+}
+
 func TestBothVersionsWithSameLogic(t *testing.T) {
 	specs := map[string]string{
 		"3.0.3": openapi30Spec,
@@ -427,6 +578,41 @@ func TestBothVersionsWithSameLogic(t *testing.T) {
 			components := extractComponents(doc)
 			if len(components) == 0 {
 				t.Errorf("No components extracted for version %s", version)
+			}
+		})
+	}
+}
+
+func TestFormatCompatibility(t *testing.T) {
+	formats := map[string]string{
+		"YAML": openapi30Spec,
+		"JSON": openapi30JSON,
+	}
+
+	for format, spec := range formats {
+		t.Run("format_"+format, func(t *testing.T) {
+			loader := openapi3.NewLoader()
+			doc, err := loader.LoadFromData([]byte(spec))
+			if err != nil {
+				t.Fatalf("Failed to load %s spec: %v", format, err)
+			}
+
+			// Both formats should work with same logic
+			endpoints := extractEndpoints(doc)
+			components := extractComponents(doc)
+
+			if len(endpoints) == 0 {
+				t.Errorf("No endpoints extracted for %s format", format)
+			}
+
+			if len(components) == 0 {
+				t.Errorf("No components extracted for %s format", format)
+			}
+
+			// Validation should work for both
+			err = doc.Validate(context.Background())
+			if err != nil {
+				t.Fatalf("%s spec validation failed: %v", format, err)
 			}
 		})
 	}
