@@ -21,9 +21,10 @@ curl https://api.example.com/openapi.json | oq
 
 ## OpenAPI Support
 
-`oq` supports major OpenAPI specification versions:
-- 3.0.x
-- 3.1.x
+`oq` supports both modern major OpenAPI specification versions:
+
+- **OpenAPI 3.0.x**
+- **OpenAPI 3.1.x**
 
 Both JSON and YAML formats are supported.
 
@@ -44,3 +45,7 @@ MIT License - see LICENSE file for details.
 ## Contributing
 
 Contributions are welcome! Please feel free to submit issues and pull requests.
+
+When contributing:
+1. Ensure tests pass: `go test -v`
+2. Test with both OpenAPI 3.0 and 3.1 examples

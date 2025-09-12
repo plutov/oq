@@ -192,8 +192,14 @@ func formatSchemaDetails(name string, schema *openapi3.Schema) string {
 		return "No schema details available"
 	}
 
-	if len(*schema.Type) > 0 {
-		details.WriteString(fmt.Sprintf("Type: %s\n", (*schema.Type)[0]))
+	// Handle both single type (OpenAPI 3.0) and array of types (OpenAPI 3.1)
+	if schema.Type != nil && len(*schema.Type) > 0 {
+		types := *schema.Type
+		if len(types) == 1 {
+			details.WriteString(fmt.Sprintf("Type: %s\n", types[0]))
+		} else {
+			details.WriteString(fmt.Sprintf("Types: %v\n", types))
+		}
 	}
 
 	if schema.Format != "" {
@@ -208,15 +214,25 @@ func formatSchemaDetails(name string, schema *openapi3.Schema) string {
 		details.WriteString("Properties:\n")
 		for propName, prop := range schema.Properties {
 			propType := "unknown"
-			if prop.Value != nil && len(*prop.Value.Type) > 0 {
-				propType = (*prop.Value.Type)[0]
+			if prop.Value != nil && prop.Value.Type != nil && len(*prop.Value.Type) > 0 {
+				types := *prop.Value.Type
+				if len(types) == 1 {
+					propType = types[0]
+				} else {
+					propType = fmt.Sprintf("%v", types)
+				}
 			}
 			details.WriteString(fmt.Sprintf("  - %s: %s\n", propName, propType))
 		}
 	}
 
-	if schema.Items != nil && schema.Items.Value != nil && len(*schema.Items.Value.Type) > 0 {
-		details.WriteString(fmt.Sprintf("Items Type: %s\n", (*schema.Items.Value.Type)[0]))
+	if schema.Items != nil && schema.Items.Value != nil && schema.Items.Value.Type != nil && len(*schema.Items.Value.Type) > 0 {
+		types := *schema.Items.Value.Type
+		if len(types) == 1 {
+			details.WriteString(fmt.Sprintf("Items Type: %s\n", types[0]))
+		} else {
+			details.WriteString(fmt.Sprintf("Items Types: %v\n", types))
+		}
 	}
 
 	return details.String()
@@ -237,8 +253,13 @@ func formatRequestBodyDetails(name string, reqBody *openapi3.RequestBody) string
 		details.WriteString("Content Types:\n")
 		for mediaType, mediaTypeObj := range reqBody.Content {
 			details.WriteString(fmt.Sprintf("  - %s", mediaType))
-			if mediaTypeObj.Schema != nil && mediaTypeObj.Schema.Value != nil && len(*mediaTypeObj.Schema.Value.Type) > 0 {
-				details.WriteString(fmt.Sprintf(" (type: %s)", (*mediaTypeObj.Schema.Value.Type)[0]))
+			if mediaTypeObj.Schema != nil && mediaTypeObj.Schema.Value != nil && mediaTypeObj.Schema.Value.Type != nil && len(*mediaTypeObj.Schema.Value.Type) > 0 {
+				types := *mediaTypeObj.Schema.Value.Type
+				if len(types) == 1 {
+					details.WriteString(fmt.Sprintf(" (type: %s)", types[0]))
+				} else {
+					details.WriteString(fmt.Sprintf(" (types: %v)", types))
+				}
 			}
 			details.WriteString("\n")
 		}
@@ -258,8 +279,13 @@ func formatResponseDetails(name string, response *openapi3.Response) string {
 		details.WriteString("Content Types:\n")
 		for mediaType, mediaTypeObj := range response.Content {
 			details.WriteString(fmt.Sprintf("  - %s", mediaType))
-			if mediaTypeObj.Schema != nil && mediaTypeObj.Schema.Value != nil && len(*mediaTypeObj.Schema.Value.Type) > 0 {
-				details.WriteString(fmt.Sprintf(" (type: %s)", (*mediaTypeObj.Schema.Value.Type)[0]))
+			if mediaTypeObj.Schema != nil && mediaTypeObj.Schema.Value != nil && mediaTypeObj.Schema.Value.Type != nil && len(*mediaTypeObj.Schema.Value.Type) > 0 {
+				types := *mediaTypeObj.Schema.Value.Type
+				if len(types) == 1 {
+					details.WriteString(fmt.Sprintf(" (type: %s)", types[0]))
+				} else {
+					details.WriteString(fmt.Sprintf(" (types: %v)", types))
+				}
 			}
 			details.WriteString("\n")
 		}
@@ -288,8 +314,13 @@ func formatParameterDetails(name string, param *openapi3.Parameter) string {
 		details.WriteString("Required: true\n")
 	}
 
-	if param.Schema != nil && param.Schema.Value != nil && len(*param.Schema.Value.Type) > 0 {
-		details.WriteString(fmt.Sprintf("Type: %s\n", (*param.Schema.Value.Type)[0]))
+	if param.Schema != nil && param.Schema.Value != nil && param.Schema.Value.Type != nil && len(*param.Schema.Value.Type) > 0 {
+		types := *param.Schema.Value.Type
+		if len(types) == 1 {
+			details.WriteString(fmt.Sprintf("Type: %s\n", types[0]))
+		} else {
+			details.WriteString(fmt.Sprintf("Types: %v\n", types))
+		}
 		if param.Schema.Value.Format != "" {
 			details.WriteString(fmt.Sprintf("Format: %s\n", param.Schema.Value.Format))
 		}
@@ -313,8 +344,13 @@ func formatHeaderDetails(name string, header *openapi3.Header) string {
 		details.WriteString("Required: true\n")
 	}
 
-	if header.Schema != nil && header.Schema.Value != nil && len(*header.Schema.Value.Type) > 0 {
-		details.WriteString(fmt.Sprintf("Type: %s\n", (*header.Schema.Value.Type)[0]))
+	if header.Schema != nil && header.Schema.Value != nil && header.Schema.Value.Type != nil && len(*header.Schema.Value.Type) > 0 {
+		types := *header.Schema.Value.Type
+		if len(types) == 1 {
+			details.WriteString(fmt.Sprintf("Type: %s\n", types[0]))
+		} else {
+			details.WriteString(fmt.Sprintf("Types: %v\n", types))
+		}
 		if header.Schema.Value.Format != "" {
 			details.WriteString(fmt.Sprintf("Format: %s\n", header.Schema.Value.Format))
 		}

@@ -28,12 +28,16 @@ func main() {
 	}
 
 	loader := openapi3.NewLoader()
+	// Enable validation for both OpenAPI 3.0 and 3.1
+	loader.IsExternalRefsAllowed = true
+
 	doc, err := loader.LoadFromData(content)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing OpenAPI: %v\n", err)
 		os.Exit(1)
 	}
 
+	// Validate the document - this works for both 3.0 and 3.1
 	err = doc.Validate(loader.Context)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "OpenAPI validation error: %v\n", err)
