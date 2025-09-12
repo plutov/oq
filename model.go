@@ -108,15 +108,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	var s strings.Builder
 
-	s.WriteString(m.renderHeader())
+	header := m.renderHeader()
+	s.WriteString(header)
 
+	var content string
 	if m.mode == viewEndpoints {
-		s.WriteString(m.renderEndpoints())
+		content = m.renderEndpoints()
 	} else {
-		s.WriteString(m.renderComponents())
+		content = m.renderComponents()
+	}
+	s.WriteString(content)
+
+	footer := m.renderFooter()
+
+	headerLines := strings.Count(header, "\n")
+	contentLines := strings.Count(content, "\n")
+	footerLines := strings.Count(footer, "\n")
+
+	usedLines := headerLines + contentLines + footerLines
+	remainingLines := m.height - usedLines - 1
+
+	if remainingLines > 0 {
+		s.WriteString(strings.Repeat("\n", remainingLines))
 	}
 
-	s.WriteString(m.renderFooter())
+	s.WriteString(footer)
 
 	return s.String()
 }

@@ -89,7 +89,7 @@ func (m Model) renderComponents() string {
 		typeStyle := lipgloss.NewStyle().
 			Foreground(componentColor).
 			Bold(true).
-			Width(12)
+			Width(16)
 
 		foldIcon := "▶"
 		if !comp.folded {
@@ -135,11 +135,8 @@ func (m Model) renderHeader() string {
 		BorderForeground(lipgloss.Color("#7C3AED")).
 		Foreground(lipgloss.Color("#7C3AED"))
 
-	title := fmt.Sprintf("OpenAPI Schema Viewer - %s %s",
-		m.doc.Info.Title, m.doc.Info.Version)
-
 	var header strings.Builder
-	header.WriteString(titleStyle.Render(title))
+	header.WriteString(titleStyle.Render("oq - OpenAPI Spec Viewer"))
 	header.WriteString("\n")
 
 	endpointsTab := "Endpoints"
@@ -160,5 +157,26 @@ func (m Model) renderHeader() string {
 }
 
 func (m Model) renderFooter() string {
-	return "\n\nPress 'tab' to switch views, 'enter' to toggle details, 'q' to quit"
+	helpText := "Press 'tab' to switch views, 'enter' to toggle details, 'q' to quit"
+
+	footerStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("#6B7280")).
+		Foreground(lipgloss.Color("#000000")).
+		Padding(0, 1).
+		Width(m.width).
+		Align(lipgloss.Left)
+
+	schemaInfo := fmt.Sprintf("%s v%s", m.doc.Info.Title, m.doc.Info.Version)
+
+	availableWidth := m.width - len(schemaInfo) - 4
+	if len(helpText) > availableWidth {
+		helpText = ""
+	}
+
+	footerContent := fmt.Sprintf("%s%s%s",
+		helpText,
+		strings.Repeat(" ", m.width-len(helpText)-len(schemaInfo)-2),
+		schemaInfo)
+
+	return "\n" + footerStyle.Render(footerContent)
 }
