@@ -1,8 +1,6 @@
-# oq
+# oq - a terminal-based OpenAPI Spec (OAS) viewer
 
 <p align="center"><img src="preview.gif" width="500" alt="oq preview"></p>
-
-A terminal-based OpenAPI Spec (OAS) viewer and processor built with Go and Bubble Tea.
 
 ## Usage
 
