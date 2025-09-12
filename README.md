@@ -34,6 +34,8 @@ Both JSON and YAML formats are supported.
 go install github.com/plutov/oq@latest
 ```
 
+You can also download the compiled binaries from the Releases page.
+
 ### From source
 
 ```bash
