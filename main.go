@@ -37,7 +37,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Validate the document - this works for both 3.0 and 3.1
 	err = doc.Validate(loader.Context)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "OpenAPI validation error: %v\n", err)

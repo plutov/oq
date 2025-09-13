@@ -65,6 +65,14 @@ func extractEndpoints(doc *openapi3.T) []endpoint {
 		}
 	}
 
+	// Sort endpoints for stable ordering: first by path, then by method
+	sort.Slice(endpoints, func(i, j int) bool {
+		if endpoints[i].path != endpoints[j].path {
+			return endpoints[i].path < endpoints[j].path
+		}
+		return endpoints[i].method < endpoints[j].method
+	})
+
 	return endpoints
 }
 
@@ -170,6 +178,14 @@ func extractComponents(doc *openapi3.T) []component {
 		}
 	}
 
+	// Sort components for stable ordering: first by type, then by name
+	sort.Slice(components, func(i, j int) bool {
+		if components[i].compType != components[j].compType {
+			return components[i].compType < components[j].compType
+		}
+		return components[i].name < components[j].name
+	})
+
 	return components
 }
 
@@ -196,7 +212,15 @@ func formatEndpointDetails(ep endpoint) string {
 
 	if ep.op.RequestBody != nil && ep.op.RequestBody.Value != nil {
 		details.WriteString("Request Body:\n")
+
+		// Get media types and sort them for stable ordering
+		var mediaTypes []string
 		for mediaType := range ep.op.RequestBody.Value.Content {
+			mediaTypes = append(mediaTypes, mediaType)
+		}
+		sort.Strings(mediaTypes)
+
+		for _, mediaType := range mediaTypes {
 			details.WriteString(fmt.Sprintf("  - %s\n", mediaType))
 		}
 	}
@@ -251,7 +275,16 @@ func formatSchemaDetails(name string, schema *openapi3.Schema) string {
 
 	if len(schema.Properties) > 0 {
 		details.WriteString("Properties:\n")
-		for propName, prop := range schema.Properties {
+
+		// Get property names and sort them for stable ordering
+		var propNames []string
+		for propName := range schema.Properties {
+			propNames = append(propNames, propName)
+		}
+		sort.Strings(propNames)
+
+		for _, propName := range propNames {
+			prop := schema.Properties[propName]
 			propType := "unknown"
 			if prop.Value != nil && prop.Value.Type != nil && len(*prop.Value.Type) > 0 {
 				types := *prop.Value.Type
@@ -290,7 +323,16 @@ func formatRequestBodyDetails(name string, reqBody *openapi3.RequestBody) string
 
 	if len(reqBody.Content) > 0 {
 		details.WriteString("Content Types:\n")
-		for mediaType, mediaTypeObj := range reqBody.Content {
+
+		// Get media types and sort them for stable ordering
+		var mediaTypes []string
+		for mediaType := range reqBody.Content {
+			mediaTypes = append(mediaTypes, mediaType)
+		}
+		sort.Strings(mediaTypes)
+
+		for _, mediaType := range mediaTypes {
+			mediaTypeObj := reqBody.Content[mediaType]
 			details.WriteString(fmt.Sprintf("  - %s", mediaType))
 			if mediaTypeObj.Schema != nil && mediaTypeObj.Schema.Value != nil && mediaTypeObj.Schema.Value.Type != nil && len(*mediaTypeObj.Schema.Value.Type) > 0 {
 				types := *mediaTypeObj.Schema.Value.Type
@@ -316,7 +358,16 @@ func formatResponseDetails(name string, response *openapi3.Response) string {
 
 	if len(response.Content) > 0 {
 		details.WriteString("Content Types:\n")
-		for mediaType, mediaTypeObj := range response.Content {
+
+		// Get media types and sort them for stable ordering
+		var mediaTypes []string
+		for mediaType := range response.Content {
+			mediaTypes = append(mediaTypes, mediaType)
+		}
+		sort.Strings(mediaTypes)
+
+		for _, mediaType := range mediaTypes {
+			mediaTypeObj := response.Content[mediaType]
 			details.WriteString(fmt.Sprintf("  - %s", mediaType))
 			if mediaTypeObj.Schema != nil && mediaTypeObj.Schema.Value != nil && mediaTypeObj.Schema.Value.Type != nil && len(*mediaTypeObj.Schema.Value.Type) > 0 {
 				types := *mediaTypeObj.Schema.Value.Type
@@ -332,7 +383,15 @@ func formatResponseDetails(name string, response *openapi3.Response) string {
 
 	if len(response.Headers) > 0 {
 		details.WriteString("Headers:\n")
+
+		// Get header names and sort them for stable ordering
+		var headerNames []string
 		for headerName := range response.Headers {
+			headerNames = append(headerNames, headerName)
+		}
+		sort.Strings(headerNames)
+
+		for _, headerName := range headerNames {
 			details.WriteString(fmt.Sprintf("  - %s\n", headerName))
 		}
 	}
