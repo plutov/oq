@@ -751,45 +751,45 @@ func TestResponseOrderingStability(t *testing.T) {
 }
 
 func TestExampleJSONResponseOrdering(t *testing.T) {
-	// Test with the actual example.json file to verify the bug fix
-	content, err := os.ReadFile("examples/example.json")
+	content, err := os.ReadFile("examples/petstore-3.0.yaml")
 	if err != nil {
-		t.Skipf("Skipping test as example.json not found: %v", err)
+		t.Errorf("Failed to read petstore-3.0.yaml: %v", err)
 		return
 	}
 
 	loader := openapi3.NewLoader()
 	doc, err := loader.LoadFromData(content)
 	if err != nil {
-		t.Fatalf("Failed to load example.json: %v", err)
+		t.Fatalf("Failed to load petstore example: %v", err)
 	}
 
 	endpoints := extractEndpoints(doc)
 
-	// Find the GET /users endpoint which has responses: 200, 400, 500
-	var getUsersEndpoint *endpoint
+	// Find the PUT /pet endpoint which has multiple response codes
+	var putPetEndpoint *endpoint
 	for i := range endpoints {
-		if endpoints[i].path == "/users" && endpoints[i].method == "GET" {
-			getUsersEndpoint = &endpoints[i]
+		if endpoints[i].path == "/pet" && endpoints[i].method == "PUT" {
+			putPetEndpoint = &endpoints[i]
 			break
 		}
 	}
 
-	if getUsersEndpoint == nil {
-		t.Fatal("GET /users endpoint not found in example.json")
+	if putPetEndpoint == nil {
+		t.Fatal("PUT /pet endpoint not found in petstore-3.0.yaml")
 	}
 
 	// Format the endpoint details multiple times
-	details1 := formatEndpointDetails(*getUsersEndpoint)
-	details2 := formatEndpointDetails(*getUsersEndpoint)
+	details1 := formatEndpointDetails(*putPetEndpoint)
+	details2 := formatEndpointDetails(*putPetEndpoint)
 
 	// Verify they are identical (stable ordering)
 	if details1 != details2 {
-		t.Error("Response ordering is not stable for example.json")
+		t.Error("Response ordering is not stable for petstore example")
 	}
 
-	// Verify the specific order: 200, 400, 500
-	expectedCodes := []string{"200", "400", "500"}
+	// Verify numeric codes appear before text codes
+	// PUT /pet has: 200, 400, 404, 422, default
+	expectedCodes := []string{"200", "400", "404", "422", "default"}
 
 	// Find positions of each response code in the formatted output
 	positions := make(map[string]int)
@@ -803,12 +803,13 @@ func TestExampleJSONResponseOrdering(t *testing.T) {
 	}
 
 	// Verify that codes appear in the correct order
-	if positions["200"] > positions["400"] {
-		t.Error("Response 200 should appear before 400")
-	}
-	if positions["400"] > positions["500"] {
-		t.Error("Response 400 should appear before 500")
+	for i := 0; i < len(expectedCodes)-1; i++ {
+		current := expectedCodes[i]
+		next := expectedCodes[i+1]
+		if positions[current] > positions[next] {
+			t.Errorf("Response %s should appear before %s", current, next)
+		}
 	}
 
-	t.Logf("Response order verified: %s", details1)
+	t.Logf("Response order verified for PUT /pet endpoint")
 }
