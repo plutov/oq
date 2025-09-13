@@ -31,7 +31,14 @@ func main() {
 	// Enable validation for both OpenAPI 3.0 and 3.1
 	loader.IsExternalRefsAllowed = true
 
-	doc, err := loader.LoadFromData(content)
+	// Try to convert OpenAPI 3.1 to 3.0 if needed
+	convertedContent, err := convertOpenAPI31To30(content)
+	if err != nil {
+		// If conversion fails, try with original content
+		convertedContent = content
+	}
+
+	doc, err := loader.LoadFromData(convertedContent)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing OpenAPI: %v\n", err)
 		os.Exit(1)

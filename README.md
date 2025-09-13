@@ -21,7 +21,7 @@ Press `?` to see the help screen with all available keyboard shortcuts.
 `oq` supports both modern major OpenAPI specification versions:
 
 - **OpenAPI 3.0.x**
-- **OpenAPI 3.1.x**
+- **OpenAPI 3.1.x** - by hacky conversion for now until [kin-openapi adds 3.1 support](https://github.com/getkin/kin-openapi/issues/230)
 
 Both JSON and YAML formats are supported.
 
