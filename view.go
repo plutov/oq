@@ -35,7 +35,23 @@ func (m Model) renderEndpoints() string {
 		"TRACE":   colorGray,
 	}
 
-	for i, ep := range m.endpoints {
+	// header (~6 lines) + footer (~4 lines)
+	contentHeight := max(1, m.height-10)
+
+	startIdx := m.scrollOffset
+	endIdx := min(m.scrollOffset+contentHeight, len(m.endpoints))
+
+	// Add scroll indicator for items above
+	if m.scrollOffset > 0 {
+		indicator := lipgloss.NewStyle().
+			Foreground(lipgloss.Color(colorGray)).
+			Render("⬆ More items above...")
+		s.WriteString(indicator)
+		s.WriteString("\n")
+	}
+
+	for i := startIdx; i < endIdx; i++ {
+		ep := m.endpoints[i]
 		style := lipgloss.NewStyle()
 		if i == m.cursor {
 			style = style.Background(lipgloss.Color(colorBackground))
@@ -74,6 +90,15 @@ func (m Model) renderEndpoints() string {
 		}
 	}
 
+	// Add scroll indicator for items below
+	if endIdx < len(m.endpoints) {
+		indicator := lipgloss.NewStyle().
+			Foreground(lipgloss.Color(colorGray)).
+			Render("⬇ More items below...")
+		s.WriteString(indicator)
+		s.WriteString("\n")
+	}
+
 	return s.String()
 }
 
@@ -89,7 +114,22 @@ func (m Model) renderComponents() string {
 		"SecurityScheme": colorGray,
 	}
 
-	for i, comp := range m.components {
+	contentHeight := max(1, m.height-10)
+
+	startIdx := m.scrollOffset
+	endIdx := min(m.scrollOffset+contentHeight, len(m.components))
+
+	// Add scroll indicator for items above
+	if m.scrollOffset > 0 {
+		indicator := lipgloss.NewStyle().
+			Foreground(lipgloss.Color(colorGray)).
+			Render("⬆ More items above...")
+		s.WriteString(indicator)
+		s.WriteString("\n")
+	}
+
+	for i := startIdx; i < endIdx; i++ {
+		comp := m.components[i]
 		style := lipgloss.NewStyle()
 		if i == m.cursor {
 			style = style.Background(lipgloss.Color(colorBackground))
@@ -129,6 +169,15 @@ func (m Model) renderComponents() string {
 			s.WriteString(detailStyle.Render(comp.details))
 			s.WriteString("\n")
 		}
+	}
+
+	// Add scroll indicator for items below
+	if endIdx < len(m.components) {
+		indicator := lipgloss.NewStyle().
+			Foreground(lipgloss.Color(colorGray)).
+			Render("⬇ More items below...")
+		s.WriteString(indicator)
+		s.WriteString("\n")
 	}
 
 	return s.String()

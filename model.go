@@ -33,16 +33,35 @@ type component struct {
 }
 
 type Model struct {
-	doc        *openapi3.T
-	endpoints  []endpoint
-	components []component
-	cursor     int
-	mode       viewMode
-	width      int
-	height     int
-	showHelp   bool
-	lastKey    string
-	lastKeyAt  time.Time
+	doc          *openapi3.T
+	endpoints    []endpoint
+	components   []component
+	cursor       int
+	mode         viewMode
+	width        int
+	height       int
+	showHelp     bool
+	lastKey      string
+	lastKeyAt    time.Time
+	scrollOffset int
+}
+
+func (m *Model) ensureCursorVisible() {
+	// header (~6 lines) + footer (~4 lines)
+	contentHeight := max(1, m.height-10)
+
+	// For simplicity, treat each item as taking 1 line for visibility calculations
+	// The actual rendering will handle multi-line items
+	if m.cursor < m.scrollOffset {
+		m.scrollOffset = m.cursor
+	} else if m.cursor >= m.scrollOffset+contentHeight {
+		m.scrollOffset = m.cursor - contentHeight + 1
+	}
+
+	// Ensure scroll offset doesn't go negative
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
+	}
 }
 
 func NewModel(doc *openapi3.T) Model {
@@ -50,14 +69,15 @@ func NewModel(doc *openapi3.T) Model {
 	components := extractComponents(doc)
 
 	return Model{
-		doc:        doc,
-		endpoints:  endpoints,
-		components: components,
-		cursor:     0,
-		mode:       viewEndpoints,
-		width:      80,
-		height:     24,
-		showHelp:   false,
+		doc:          doc,
+		endpoints:    endpoints,
+		components:   components,
+		cursor:       0,
+		mode:         viewEndpoints,
+		width:        80,
+		height:       24,
+		showHelp:     false,
+		scrollOffset: 0,
 	}
 }
 
@@ -96,11 +116,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.mode = viewEndpoints
 				}
 				m.cursor = 0
+				m.scrollOffset = 0
 			}
 
 		case "up", "k":
 			if !m.showHelp && m.cursor > 0 {
 				m.cursor--
+				m.ensureCursorVisible()
 			}
 
 		case "down", "j":
@@ -112,6 +134,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				if m.cursor < maxItems {
 					m.cursor++
+					m.ensureCursorVisible()
 				}
 			}
 
@@ -124,6 +147,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				if maxItems >= 0 {
 					m.cursor = maxItems
+					m.ensureCursorVisible()
 				} else {
 					maxItems = 0
 				}
@@ -134,6 +158,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.lastKey == "g" && now.Sub(m.lastKeyAt) < keySequenceThreshold {
 				if !m.showHelp {
 					m.cursor = 0
+					m.ensureCursorVisible()
 				}
 
 				// reset, so "ggg" wouldn't be triggered
