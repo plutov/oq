@@ -32,6 +32,9 @@ func convertOpenAPI31To30(content []byte) ([]byte, error) {
 	// Process the spec recursively
 	processNode(spec)
 
+	// Downgrade the version to 3.0.x to reflect the conversion
+	spec["openapi"] = "3.0.3"
+
 	// Convert back to JSON (kin-openapi works better with JSON)
 	return json.Marshal(spec)
 }
