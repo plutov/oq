@@ -114,10 +114,8 @@ func processMap(m map[string]interface{}) {
 		"if",
 		"then",
 		"else",
-		"const",
 		"webhooks", // OpenAPI 3.1 feature not supported in 3.0
 	}
-
 	for _, field := range openapi31Fields {
 		delete(m, field)
 	}
