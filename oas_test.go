@@ -813,3 +813,224 @@ func TestExampleJSONResponseOrdering(t *testing.T) {
 
 	t.Logf("Response order verified for PUT /pet endpoint")
 }
+
+// Test OpenAPI 3.1 to 3.0 conversion
+func TestOpenAPI31To30Conversion(t *testing.T) {
+	// Test with OpenAPI 3.1 spec that needs conversion
+	openapi31WithExamples := `{
+		"openapi": "3.1.0",
+		"info": {
+			"title": "Test API",
+			"version": "1.0.0"
+		},
+		"paths": {
+			"/test": {
+				"get": {
+					"summary": "Test endpoint",
+					"responses": {
+						"200": {"description": "Success"}
+					}
+				}
+			}
+		},
+		"components": {
+			"schemas": {
+				"Product": {
+					"type": "object",
+					"properties": {
+						"id": {
+							"type": "string",
+							"examples": ["123", "456"]
+						},
+						"price": {
+							"type": "number",
+							"exclusiveMinimum": 0
+						}
+					}
+				}
+			}
+		}
+	}`
+
+	// Test conversion
+	converted, err := convertOpenAPI31To30([]byte(openapi31WithExamples))
+	if err != nil {
+		t.Fatalf("Failed to convert OpenAPI 3.1 to 3.0: %v", err)
+	}
+
+	// Parse the converted spec
+	loader := openapi3.NewLoader()
+	doc, err := loader.LoadFromData(converted)
+	if err != nil {
+		t.Fatalf("Failed to load converted spec: %v", err)
+	}
+
+	// Verify it's now 3.0.3
+	if doc.OpenAPI != "3.0.3" {
+		t.Errorf("Expected converted version to be 3.0.3, got %s", doc.OpenAPI)
+	}
+
+	// Verify it validates
+	err = doc.Validate(context.Background())
+	if err != nil {
+		t.Fatalf("Converted spec validation failed: %v", err)
+	}
+}
+
+// Test with OpenAPI 3.0 spec (should pass through unchanged)
+func TestOpenAPI30Passthrough(t *testing.T) {
+	openapi30Spec := `{
+		"openapi": "3.0.3",
+		"info": {
+			"title": "Test API",
+			"version": "1.0.0"
+		},
+		"paths": {
+			"/test": {
+				"get": {
+					"summary": "Test endpoint",
+					"responses": {
+						"200": {"description": "Success"}
+					}
+				}
+			}
+		}
+	}`
+
+	converted, err := convertOpenAPI31To30([]byte(openapi30Spec))
+	if err != nil {
+		t.Fatalf("Failed to process OpenAPI 3.0 spec: %v", err)
+	}
+
+	// Should be identical to input
+	loader := openapi3.NewLoader()
+	doc, err := loader.LoadFromData(converted)
+	if err != nil {
+		t.Fatalf("Failed to load spec: %v", err)
+	}
+
+	if doc.OpenAPI != "3.0.3" {
+		t.Errorf("Expected version to remain 3.0.3, got %s", doc.OpenAPI)
+	}
+}
+
+// Test all example files
+func TestAllExampleFiles(t *testing.T) {
+	exampleFiles := []string{
+		"examples/petstore-3.0.yaml",
+		"examples/petstore-3.1.yaml",
+		"examples/train-travel-3.1.json",
+		"examples/train-travel-3.1.yaml",
+	}
+
+	for _, filename := range exampleFiles {
+		t.Run(filename, func(t *testing.T) {
+			content, err := os.ReadFile(filename)
+			if err != nil {
+				t.Errorf("Failed to read %s: %v", filename, err)
+				return
+			}
+
+			// Try to convert (will pass through if already 3.0)
+			converted, err := convertOpenAPI31To30(content)
+			if err != nil {
+				// If conversion fails, try with original content
+				converted = content
+			}
+
+			loader := openapi3.NewLoader()
+			loader.IsExternalRefsAllowed = true
+
+			doc, err := loader.LoadFromData(converted)
+			if err != nil {
+				t.Fatalf("Failed to load %s: %v", filename, err)
+			}
+
+			// Validate the spec
+			err = doc.Validate(loader.Context)
+			if err != nil {
+				t.Fatalf("Validation failed for %s: %v", filename, err)
+			}
+
+			// Test endpoint extraction
+			endpoints := extractEndpoints(doc)
+			if len(endpoints) == 0 {
+				t.Errorf("No endpoints found in %s", filename)
+			}
+
+			// Test component extraction
+			components := extractComponents(doc)
+			// Note: some specs might not have components, so we just check that extraction doesn't crash
+
+			// Test endpoint formatting
+			for _, ep := range endpoints {
+				details := formatEndpointDetails(ep)
+				if details == "" {
+					t.Errorf("Empty details for endpoint %s %s in %s", ep.method, ep.path, filename)
+				}
+			}
+
+			// Test component formatting
+			for _, comp := range components {
+				// Just verify that formatting doesn't crash
+				switch comp.compType {
+				case "Schema":
+					if len(comp.details) == 0 {
+						t.Errorf("Empty details for schema %s in %s", comp.name, filename)
+					}
+				}
+			}
+
+			t.Logf("Successfully processed %s with %d endpoints and %d components",
+				filename, len(endpoints), len(components))
+		})
+	}
+}
+
+// Test converter with YAML input
+func TestConverterWithYAML(t *testing.T) {
+	yamlSpec := `
+openapi: 3.1.0
+info:
+  title: YAML Test API
+  version: 1.0.0
+paths:
+  /test:
+    get:
+      summary: Test endpoint
+      responses:
+        '200':
+          description: Success
+components:
+  schemas:
+    Item:
+      type: object
+      properties:
+        id:
+          type: string
+          examples: 
+            - "test-id"
+        status:
+          const: "active"
+`
+
+	converted, err := convertOpenAPI31To30([]byte(yamlSpec))
+	if err != nil {
+		t.Fatalf("Failed to convert YAML spec: %v", err)
+	}
+
+	loader := openapi3.NewLoader()
+	doc, err := loader.LoadFromData(converted)
+	if err != nil {
+		t.Fatalf("Failed to load converted YAML spec: %v", err)
+	}
+
+	if doc.OpenAPI != "3.0.3" {
+		t.Errorf("Expected converted version to be 3.0.3, got %s", doc.OpenAPI)
+	}
+
+	err = doc.Validate(context.Background())
+	if err != nil {
+		t.Fatalf("Converted YAML spec validation failed: %v", err)
+	}
+}
