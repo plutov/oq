@@ -23,13 +23,10 @@ func convertOpenAPI31To30(content []byte) ([]byte, error) {
 		}
 	}
 
-	// Check if this is OpenAPI 3.1
 	if version, ok := spec["openapi"].(string); !ok || !strings.HasPrefix(version, "3.1") {
-		// Not 3.1, return as-is
 		return content, nil
 	}
 
-	// Process the spec recursively
 	processNode(spec)
 
 	// Downgrade the version to 3.0.x to reflect the conversion

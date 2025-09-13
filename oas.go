@@ -168,17 +168,13 @@ func isHTTPMethod(method string) bool {
 	return httpMethods[strings.ToLower(method)]
 }
 
-func hasWebhooks(doc *openapi3.T) bool {
-	return isOpenAPI31OrLater(doc) && doc.Extensions["webhooks"] != nil
-}
-
 func extractComponents(doc *openapi3.T) []component {
 	var components []component
 
 	if doc.Components != nil {
 		if doc.Components.Schemas != nil {
 			for name, schema := range doc.Components.Schemas {
-				details := formatSchemaDetails(name, schema.Value)
+				details := formatSchemaDetails(schema.Value)
 				description := ""
 				if schema.Value != nil && schema.Value.Description != "" {
 					description = schema.Value.Description
@@ -194,7 +190,7 @@ func extractComponents(doc *openapi3.T) []component {
 		}
 		if doc.Components.RequestBodies != nil {
 			for name, reqBody := range doc.Components.RequestBodies {
-				details := formatRequestBodyDetails(name, reqBody.Value)
+				details := formatRequestBodyDetails(reqBody.Value)
 				description := ""
 				if reqBody.Value != nil && reqBody.Value.Description != "" {
 					description = reqBody.Value.Description
@@ -210,7 +206,7 @@ func extractComponents(doc *openapi3.T) []component {
 		}
 		if doc.Components.Responses != nil {
 			for name, resp := range doc.Components.Responses {
-				details := formatResponseDetails(name, resp.Value)
+				details := formatResponseDetails(resp.Value)
 				description := ""
 				if resp.Value != nil && resp.Value.Description != nil {
 					description = *resp.Value.Description
@@ -226,7 +222,7 @@ func extractComponents(doc *openapi3.T) []component {
 		}
 		if doc.Components.Parameters != nil {
 			for name, param := range doc.Components.Parameters {
-				details := formatParameterDetails(name, param.Value)
+				details := formatParameterDetails(param.Value)
 				description := ""
 				if param.Value != nil && param.Value.Description != "" {
 					description = param.Value.Description
@@ -242,7 +238,7 @@ func extractComponents(doc *openapi3.T) []component {
 		}
 		if doc.Components.Headers != nil {
 			for name, header := range doc.Components.Headers {
-				details := formatHeaderDetails(name, header.Value)
+				details := formatHeaderDetails(header.Value)
 				description := ""
 				if header.Value != nil && header.Value.Description != "" {
 					description = header.Value.Description
@@ -344,7 +340,7 @@ func formatEndpointDetails(ep endpoint) string {
 	return details.String()
 }
 
-func formatSchemaDetails(name string, schema *openapi3.Schema) string {
+func formatSchemaDetails(schema *openapi3.Schema) string {
 	var details strings.Builder
 
 	if schema == nil {
@@ -406,7 +402,7 @@ func formatSchemaDetails(name string, schema *openapi3.Schema) string {
 	return details.String()
 }
 
-func formatRequestBodyDetails(name string, reqBody *openapi3.RequestBody) string {
+func formatRequestBodyDetails(reqBody *openapi3.RequestBody) string {
 	var details strings.Builder
 
 	if reqBody == nil {
@@ -445,7 +441,7 @@ func formatRequestBodyDetails(name string, reqBody *openapi3.RequestBody) string
 	return details.String()
 }
 
-func formatResponseDetails(name string, response *openapi3.Response) string {
+func formatResponseDetails(response *openapi3.Response) string {
 	var details strings.Builder
 
 	if response == nil {
@@ -495,7 +491,7 @@ func formatResponseDetails(name string, response *openapi3.Response) string {
 	return details.String()
 }
 
-func formatParameterDetails(name string, param *openapi3.Parameter) string {
+func formatParameterDetails(param *openapi3.Parameter) string {
 	var details strings.Builder
 
 	if param == nil {
@@ -527,7 +523,7 @@ func formatParameterDetails(name string, param *openapi3.Parameter) string {
 	return details.String()
 }
 
-func formatHeaderDetails(name string, header *openapi3.Header) string {
+func formatHeaderDetails(header *openapi3.Header) string {
 	var details strings.Builder
 
 	if header == nil {

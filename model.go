@@ -168,10 +168,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "down", "j":
 			if !m.showHelp {
-				maxItems := len(m.endpoints) - 1
-				if m.mode == viewComponents {
+				var maxItems int
+				switch m.mode {
+				case viewEndpoints:
+					maxItems = len(m.endpoints) - 1
+				case viewComponents:
 					maxItems = len(m.components) - 1
-				} else if m.mode == viewWebhooks {
+				case viewWebhooks:
 					maxItems = len(m.webhooks) - 1
 				}
 
@@ -183,18 +186,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "G":
 			if !m.showHelp {
-				maxItems := len(m.endpoints) - 1
-				if m.mode == viewComponents {
+				var maxItems int
+				switch m.mode {
+				case viewEndpoints:
+					maxItems = len(m.endpoints) - 1
+				case viewComponents:
 					maxItems = len(m.components) - 1
-				} else if m.mode == viewWebhooks {
+				case viewWebhooks:
 					maxItems = len(m.webhooks) - 1
 				}
 
 				if maxItems >= 0 {
 					m.cursor = maxItems
 					m.ensureCursorVisible()
-				} else {
-					maxItems = 0
 				}
 			}
 
@@ -238,11 +242,12 @@ func (m Model) View() string {
 	s.WriteString(header)
 
 	var content string
-	if m.mode == viewEndpoints {
+	switch m.mode {
+	case viewEndpoints:
 		content = m.renderEndpoints()
-	} else if m.mode == viewComponents {
+	case viewComponents:
 		content = m.renderComponents()
-	} else {
+	case viewWebhooks:
 		content = m.renderWebhooks()
 	}
 	s.WriteString(content)
