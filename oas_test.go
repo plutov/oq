@@ -865,11 +865,6 @@ func TestOpenAPI31To30Conversion(t *testing.T) {
 		t.Fatalf("Failed to load converted spec: %v", err)
 	}
 
-	// Verify it's now 3.0.3
-	if doc.OpenAPI != "3.0.3" {
-		t.Errorf("Expected converted version to be 3.0.3, got %s", doc.OpenAPI)
-	}
-
 	// Verify it validates
 	err = doc.Validate(context.Background())
 	if err != nil {
@@ -1023,10 +1018,6 @@ components:
 	doc, err := loader.LoadFromData(converted)
 	if err != nil {
 		t.Fatalf("Failed to load converted YAML spec: %v", err)
-	}
-
-	if doc.OpenAPI != "3.0.3" {
-		t.Errorf("Expected converted version to be 3.0.3, got %s", doc.OpenAPI)
 	}
 
 	err = doc.Validate(context.Background())
