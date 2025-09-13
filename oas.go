@@ -2,10 +2,38 @@ package main
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
 )
+
+// sortResponseCodes sorts HTTP response codes with stable ordering:
+// 1. Numeric codes sorted numerically (100, 200, 201, 400, 404, 500)
+// 2. Non-numeric codes sorted alphabetically (default)
+func sortResponseCodes(codes []string) {
+	sort.Slice(codes, func(i, j int) bool {
+		codeI, errI := strconv.Atoi(codes[i])
+		codeJ, errJ := strconv.Atoi(codes[j])
+
+		// Both are numeric - sort numerically
+		if errI == nil && errJ == nil {
+			return codeI < codeJ
+		}
+
+		// One numeric, one non-numeric - numeric comes first
+		if errI == nil && errJ != nil {
+			return true
+		}
+		if errI != nil && errJ == nil {
+			return false
+		}
+
+		// Both non-numeric - sort alphabetically
+		return codes[i] < codes[j]
+	})
+}
 
 func extractEndpoints(doc *openapi3.T) []endpoint {
 	var endpoints []endpoint
@@ -175,7 +203,18 @@ func formatEndpointDetails(ep endpoint) string {
 
 	if ep.op.Responses != nil {
 		details.WriteString("Responses:\n")
-		for code, resp := range ep.op.Responses.Map() {
+
+		// Get response codes and sort them for stable ordering
+		var codes []string
+		for code := range ep.op.Responses.Map() {
+			codes = append(codes, code)
+		}
+
+		// Sort by status code numerically, then alphabetically for non-numeric codes
+		sortResponseCodes(codes)
+
+		for _, code := range codes {
+			resp := ep.op.Responses.Map()[code]
 			if resp.Value != nil && resp.Value.Description != nil {
 				details.WriteString(fmt.Sprintf("  - %s: %s\n", code, *resp.Value.Description))
 			}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
@@ -616,4 +617,198 @@ func TestFormatCompatibility(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSortResponseCodes(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []string
+		expected []string
+	}{
+		{
+			name:     "mixed numeric and text codes",
+			input:    []string{"500", "200", "default", "404", "201"},
+			expected: []string{"200", "201", "404", "500", "default"},
+		},
+		{
+			name:     "all numeric codes",
+			input:    []string{"500", "200", "404", "201", "400"},
+			expected: []string{"200", "201", "400", "404", "500"},
+		},
+		{
+			name:     "all text codes",
+			input:    []string{"default", "error", "abc"},
+			expected: []string{"abc", "default", "error"},
+		},
+		{
+			name:     "single code",
+			input:    []string{"200"},
+			expected: []string{"200"},
+		},
+		{
+			name:     "empty slice",
+			input:    []string{},
+			expected: []string{},
+		},
+		{
+			name:     "from example.json order",
+			input:    []string{"400", "500", "200"},
+			expected: []string{"200", "400", "500"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			codes := make([]string, len(tt.input))
+			copy(codes, tt.input)
+
+			sortResponseCodes(codes)
+
+			if len(codes) != len(tt.expected) {
+				t.Errorf("Expected length %d, got %d", len(tt.expected), len(codes))
+				return
+			}
+
+			for i, expected := range tt.expected {
+				if codes[i] != expected {
+					t.Errorf("At index %d: expected %s, got %s", i, expected, codes[i])
+				}
+			}
+		})
+	}
+}
+
+func TestResponseOrderingStability(t *testing.T) {
+	// Create a test spec with responses in different order
+	testSpec := `{
+		"openapi": "3.0.3",
+		"info": {
+			"title": "Test API",
+			"version": "1.0.0"
+		},
+		"paths": {
+			"/test": {
+				"get": {
+					"summary": "Test endpoint",
+					"responses": {
+						"500": {"description": "Internal server error"},
+						"200": {"description": "Success"},
+						"400": {"description": "Bad request"},
+						"404": {"description": "Not found"},
+						"default": {"description": "Default response"}
+					}
+				}
+			}
+		}
+	}`
+
+	loader := openapi3.NewLoader()
+	doc, err := loader.LoadFromData([]byte(testSpec))
+	if err != nil {
+		t.Fatalf("Failed to load test spec: %v", err)
+	}
+
+	endpoints := extractEndpoints(doc)
+	if len(endpoints) != 1 {
+		t.Fatalf("Expected 1 endpoint, got %d", len(endpoints))
+	}
+
+	// Format details multiple times and ensure order is consistent
+	details1 := formatEndpointDetails(endpoints[0])
+	details2 := formatEndpointDetails(endpoints[0])
+	details3 := formatEndpointDetails(endpoints[0])
+
+	if details1 != details2 || details2 != details3 {
+		t.Error("Response ordering is not stable across multiple calls")
+		t.Logf("Details1:\n%s", details1)
+		t.Logf("Details2:\n%s", details2)
+		t.Logf("Details3:\n%s", details3)
+	}
+
+	// Check that the expected order appears in the output
+	expectedOrder := []string{"200", "400", "404", "500", "default"}
+	for i := 0; i < len(expectedOrder)-1; i++ {
+		current := expectedOrder[i]
+		next := expectedOrder[i+1]
+
+		currentIndex := strings.Index(details1, current+":")
+		nextIndex := strings.Index(details1, next+":")
+
+		if currentIndex == -1 {
+			t.Errorf("Response code %s not found in details", current)
+			continue
+		}
+		if nextIndex == -1 {
+			t.Errorf("Response code %s not found in details", next)
+			continue
+		}
+
+		if currentIndex > nextIndex {
+			t.Errorf("Response code %s should appear before %s, but found at positions %d and %d",
+				current, next, currentIndex, nextIndex)
+		}
+	}
+}
+
+func TestExampleJSONResponseOrdering(t *testing.T) {
+	// Test with the actual example.json file to verify the bug fix
+	content, err := os.ReadFile("examples/example.json")
+	if err != nil {
+		t.Skipf("Skipping test as example.json not found: %v", err)
+		return
+	}
+
+	loader := openapi3.NewLoader()
+	doc, err := loader.LoadFromData(content)
+	if err != nil {
+		t.Fatalf("Failed to load example.json: %v", err)
+	}
+
+	endpoints := extractEndpoints(doc)
+
+	// Find the GET /users endpoint which has responses: 200, 400, 500
+	var getUsersEndpoint *endpoint
+	for i := range endpoints {
+		if endpoints[i].path == "/users" && endpoints[i].method == "GET" {
+			getUsersEndpoint = &endpoints[i]
+			break
+		}
+	}
+
+	if getUsersEndpoint == nil {
+		t.Fatal("GET /users endpoint not found in example.json")
+	}
+
+	// Format the endpoint details multiple times
+	details1 := formatEndpointDetails(*getUsersEndpoint)
+	details2 := formatEndpointDetails(*getUsersEndpoint)
+
+	// Verify they are identical (stable ordering)
+	if details1 != details2 {
+		t.Error("Response ordering is not stable for example.json")
+	}
+
+	// Verify the specific order: 200, 400, 500
+	expectedCodes := []string{"200", "400", "500"}
+
+	// Find positions of each response code in the formatted output
+	positions := make(map[string]int)
+	for _, code := range expectedCodes {
+		pos := strings.Index(details1, "- "+code+":")
+		if pos == -1 {
+			t.Errorf("Response code %s not found in formatted details", code)
+			continue
+		}
+		positions[code] = pos
+	}
+
+	// Verify that codes appear in the correct order
+	if positions["200"] > positions["400"] {
+		t.Error("Response 200 should appear before 400")
+	}
+	if positions["400"] > positions["500"] {
+		t.Error("Response 400 should appear before 500")
+	}
+
+	t.Logf("Response order verified: %s", details1)
 }
