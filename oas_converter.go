@@ -36,7 +36,12 @@ func convertOpenAPI31To30(content []byte) ([]byte, error) {
 	spec["openapi"] = "3.0.3"
 
 	// Convert back to JSON (kin-openapi works better with JSON)
-	return json.Marshal(spec)
+	converted, err := json.Marshal(spec)
+	if err != nil {
+		return content, fmt.Errorf("failed to marshal converted spec: %v", err)
+	}
+
+	return converted, nil
 }
 
 // processNode recursively processes a node in the OpenAPI spec
@@ -89,11 +94,40 @@ func processMap(m map[string]interface{}) {
 	if schemaType, ok := m["type"]; ok {
 		switch val := schemaType.(type) {
 		case []interface{}:
-			// Take the first type for OpenAPI 3.0 compatibility
+			// Handle array of types for OpenAPI 3.0 compatibility
 			if len(val) > 0 {
-				if firstType, ok := val[0].(string); ok {
-					m["type"] = firstType
+				var nonNullTypes []string
+				var hasNull bool
+
+				// Check for null type and collect non-null types
+				for _, typeVal := range val {
+					if typeStr, ok := typeVal.(string); ok {
+						if typeStr == "null" {
+							hasNull = true
+						} else {
+							nonNullTypes = append(nonNullTypes, typeStr)
+						}
+					}
 				}
+
+				// Set the type to the first non-null type (or null if that's all we have)
+				if len(nonNullTypes) > 0 {
+					m["type"] = nonNullTypes[0]
+					// If there was a null type, mark as nullable for OpenAPI 3.0
+					if hasNull {
+						m["nullable"] = true
+					}
+				} else if hasNull {
+					// Only null type - this is unusual but handle it
+					delete(m, "type")
+					m["nullable"] = true
+				}
+			}
+		case string:
+			// Handle standalone null type
+			if val == "null" {
+				delete(m, "type")
+				m["nullable"] = true
 			}
 		}
 	}
@@ -114,7 +148,10 @@ func processMap(m map[string]interface{}) {
 		"if",
 		"then",
 		"else",
-		"webhooks", // OpenAPI 3.1 feature not supported in 3.0
+		"webhooks",         // OpenAPI 3.1 feature not supported in 3.0
+		"contentEncoding",  // JSON Schema feature not supported in OpenAPI 3.0
+		"contentMediaType", // JSON Schema feature not supported in OpenAPI 3.0
+		"contentSchema",    // JSON Schema feature not supported in OpenAPI 3.0
 	}
 	for _, field := range openapi31Fields {
 		delete(m, field)
