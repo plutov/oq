@@ -13,9 +13,17 @@ type viewMode int
 const (
 	viewEndpoints viewMode = iota
 	viewComponents
+	viewWebhooks
 )
 
 const keySequenceThreshold = 500 * time.Millisecond
+
+type webhook struct {
+	name   string
+	method string
+	op     *openapi3.Operation
+	folded bool
+}
 
 type endpoint struct {
 	path   string
@@ -36,6 +44,7 @@ type Model struct {
 	doc          *openapi3.T
 	endpoints    []endpoint
 	components   []component
+	webhooks     []webhook
 	cursor       int
 	mode         viewMode
 	width        int
@@ -67,11 +76,13 @@ func (m *Model) ensureCursorVisible() {
 func NewModel(doc *openapi3.T) Model {
 	endpoints := extractEndpoints(doc)
 	components := extractComponents(doc)
+	webhooks := extractWebhooks(doc)
 
 	return Model{
 		doc:          doc,
 		endpoints:    endpoints,
 		components:   components,
+		webhooks:     webhooks,
 		cursor:       0,
 		mode:         viewEndpoints,
 		width:        80,
@@ -79,6 +90,28 @@ func NewModel(doc *openapi3.T) Model {
 		showHelp:     false,
 		scrollOffset: 0,
 	}
+}
+
+func NewModelWithWebhooks(doc *openapi3.T, webhooks []webhook) Model {
+	endpoints := extractEndpoints(doc)
+	components := extractComponents(doc)
+
+	return Model{
+		doc:          doc,
+		endpoints:    endpoints,
+		components:   components,
+		webhooks:     webhooks,
+		cursor:       0,
+		mode:         viewEndpoints,
+		width:        80,
+		height:       24,
+		showHelp:     false,
+		scrollOffset: 0,
+	}
+}
+
+func (m *Model) hasWebhooks() bool {
+	return len(m.webhooks) > 0
 }
 
 func (m Model) Init() tea.Cmd {
@@ -110,9 +143,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "tab":
 			if !m.showHelp {
-				if m.mode == viewEndpoints {
+				// Cycle through available views
+				switch m.mode {
+				case viewEndpoints:
+					if m.hasWebhooks() {
+						m.mode = viewWebhooks
+					} else {
+						m.mode = viewComponents
+					}
+				case viewWebhooks:
 					m.mode = viewComponents
-				} else {
+				case viewComponents:
 					m.mode = viewEndpoints
 				}
 				m.cursor = 0
@@ -130,6 +171,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				maxItems := len(m.endpoints) - 1
 				if m.mode == viewComponents {
 					maxItems = len(m.components) - 1
+				} else if m.mode == viewWebhooks {
+					maxItems = len(m.webhooks) - 1
 				}
 
 				if m.cursor < maxItems {
@@ -143,6 +186,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				maxItems := len(m.endpoints) - 1
 				if m.mode == viewComponents {
 					maxItems = len(m.components) - 1
+				} else if m.mode == viewWebhooks {
+					maxItems = len(m.webhooks) - 1
 				}
 
 				if maxItems >= 0 {
@@ -176,6 +221,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.endpoints[m.cursor].folded = !m.endpoints[m.cursor].folded
 				} else if m.mode == viewComponents && m.cursor < len(m.components) {
 					m.components[m.cursor].folded = !m.components[m.cursor].folded
+				} else if m.mode == viewWebhooks && m.cursor < len(m.webhooks) {
+					m.webhooks[m.cursor].folded = !m.webhooks[m.cursor].folded
 				}
 			}
 		}
@@ -193,8 +240,10 @@ func (m Model) View() string {
 	var content string
 	if m.mode == viewEndpoints {
 		content = m.renderEndpoints()
-	} else {
+	} else if m.mode == viewComponents {
 		content = m.renderComponents()
+	} else {
+		content = m.renderWebhooks()
 	}
 	s.WriteString(content)
 

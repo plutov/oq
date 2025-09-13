@@ -183,6 +183,87 @@ func (m Model) renderComponents() string {
 	return s.String()
 }
 
+func (m Model) renderWebhooks() string {
+	var s strings.Builder
+
+	methodColors := map[string]lipgloss.Color{
+		"GET":     colorGreen,
+		"POST":    colorBlue,
+		"PUT":     colorYellow,
+		"DELETE":  colorRed,
+		"PATCH":   colorPurple,
+		"HEAD":    colorGray,
+		"OPTIONS": colorGray,
+		"TRACE":   colorGray,
+	}
+
+	// header (~6 lines) + footer (~4 lines)
+	contentHeight := max(1, m.height-10)
+
+	startIdx := m.scrollOffset
+	endIdx := min(m.scrollOffset+contentHeight, len(m.webhooks))
+
+	// Add scroll indicator for items above
+	if m.scrollOffset > 0 {
+		indicator := lipgloss.NewStyle().
+			Foreground(lipgloss.Color(colorGray)).
+			Render("⬆ More items above...")
+		s.WriteString(indicator)
+		s.WriteString("\n")
+	}
+
+	for i := startIdx; i < endIdx; i++ {
+		hook := m.webhooks[i]
+		style := lipgloss.NewStyle()
+		if i == m.cursor {
+			style = style.Background(lipgloss.Color(colorBackground))
+		}
+
+		methodColor := methodColors[hook.method]
+		if methodColor == "" {
+			methodColor = colorGray
+		}
+
+		methodStyle := lipgloss.NewStyle().
+			Foreground(methodColor).
+			Bold(true).
+			Width(7)
+
+		foldIcon := "▶"
+		if !hook.folded {
+			foldIcon = "▼"
+		}
+
+		line := fmt.Sprintf("%s %s %s",
+			foldIcon,
+			methodStyle.Render(hook.method),
+			hook.name)
+
+		s.WriteString(style.Render(line))
+		s.WriteString("\n")
+
+		if !hook.folded {
+			details := formatWebhookDetails(hook)
+			detailStyle := lipgloss.NewStyle().
+				PaddingLeft(2).
+				Foreground(lipgloss.Color(colorDetailGray))
+			s.WriteString(detailStyle.Render(details))
+			s.WriteString("\n")
+		}
+	}
+
+	// Add scroll indicator for items below
+	if endIdx < len(m.webhooks) {
+		indicator := lipgloss.NewStyle().
+			Foreground(lipgloss.Color(colorGray)).
+			Render("⬇ More items below...")
+		s.WriteString(indicator)
+		s.WriteString("\n")
+	}
+
+	return s.String()
+}
+
 func (m Model) renderHeader() string {
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
@@ -204,16 +285,32 @@ func (m Model) renderHeader() string {
 
 	endpointsTab := "Endpoints"
 	componentsTab := "Components"
+	webhooksTab := "Webhooks"
+
+	// Build tab array based on what's available
+	var tabs []string
 
 	if m.mode == viewEndpoints {
-		endpointsTab = activeTabStyle.Render(endpointsTab)
-		componentsTab = tabStyle.Render(componentsTab)
+		tabs = append(tabs, activeTabStyle.Render(endpointsTab))
 	} else {
-		endpointsTab = tabStyle.Render(endpointsTab)
-		componentsTab = activeTabStyle.Render(componentsTab)
+		tabs = append(tabs, tabStyle.Render(endpointsTab))
 	}
 
-	header.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, endpointsTab, " ", componentsTab))
+	if m.hasWebhooks() {
+		if m.mode == viewWebhooks {
+			tabs = append(tabs, activeTabStyle.Render(webhooksTab))
+		} else {
+			tabs = append(tabs, tabStyle.Render(webhooksTab))
+		}
+	}
+
+	if m.mode == viewComponents {
+		tabs = append(tabs, activeTabStyle.Render(componentsTab))
+	} else {
+		tabs = append(tabs, tabStyle.Render(componentsTab))
+	}
+
+	header.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, tabs...))
 	header.WriteString("\n\n")
 
 	return header.String()

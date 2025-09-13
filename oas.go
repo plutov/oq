@@ -76,6 +76,102 @@ func extractEndpoints(doc *openapi3.T) []endpoint {
 	return endpoints
 }
 
+func extractWebhooks(doc *openapi3.T) []webhook {
+	var webhooks []webhook
+
+	// Check if this is OpenAPI 3.1+ first
+	if !isOpenAPI31OrLater(doc) {
+		return webhooks
+	}
+
+	// Check in Extensions first
+	if webhookData, ok := doc.Extensions["webhooks"].(map[string]interface{}); ok {
+		webhooks = parseWebhooksFromData(webhookData)
+	}
+
+	return webhooks
+}
+
+func parseWebhooksFromData(webhookData map[string]interface{}) []webhook {
+	var webhooks []webhook
+
+	for name, hookData := range webhookData {
+		if hookMap, ok := hookData.(map[string]interface{}); ok {
+			// Look for HTTP methods in the webhook
+			for method, methodData := range hookMap {
+				if isHTTPMethod(method) {
+					if methodMap, ok := methodData.(map[string]interface{}); ok {
+						// Create a mock operation from the webhook data
+						op := &openapi3.Operation{}
+						if summary, ok := methodMap["summary"].(string); ok {
+							op.Summary = summary
+						}
+						if description, ok := methodMap["description"].(string); ok {
+							op.Description = description
+						}
+						if operationId, ok := methodMap["operationId"].(string); ok {
+							op.OperationID = operationId
+						}
+
+						webhooks = append(webhooks, webhook{
+							name:   name,
+							method: strings.ToUpper(method),
+							op:     op,
+							folded: true,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	// Sort webhooks for stable ordering: first by name, then by method
+	sort.Slice(webhooks, func(i, j int) bool {
+		if webhooks[i].name != webhooks[j].name {
+			return webhooks[i].name < webhooks[j].name
+		}
+		return webhooks[i].method < webhooks[j].method
+	})
+
+	return webhooks
+}
+
+func isOpenAPI31OrLater(doc *openapi3.T) bool {
+	if doc == nil || doc.OpenAPI == "" {
+		return false
+	}
+
+	// Extract major and minor version
+	parts := strings.Split(doc.OpenAPI, ".")
+	if len(parts) < 2 {
+		return false
+	}
+
+	major := parts[0]
+	minor := parts[1]
+
+	// Check for version 3.1 or later
+	return major == "3" && (minor == "1" || minor > "1") || major > "3"
+}
+
+func isHTTPMethod(method string) bool {
+	httpMethods := map[string]bool{
+		"get":     true,
+		"post":    true,
+		"put":     true,
+		"delete":  true,
+		"patch":   true,
+		"head":    true,
+		"options": true,
+		"trace":   true,
+	}
+	return httpMethods[strings.ToLower(method)]
+}
+
+func hasWebhooks(doc *openapi3.T) bool {
+	return isOpenAPI31OrLater(doc) && doc.Extensions["webhooks"] != nil
+}
+
 func extractComponents(doc *openapi3.T) []component {
 	var components []component
 
@@ -480,6 +576,24 @@ func formatSecuritySchemeDetails(name string, secScheme *openapi3.SecurityScheme
 
 	if secScheme.Name != "" {
 		details.WriteString(fmt.Sprintf("Name: %s\n", secScheme.Name))
+	}
+
+	return details.String()
+}
+
+func formatWebhookDetails(hook webhook) string {
+	var details strings.Builder
+
+	if hook.op.Summary != "" {
+		details.WriteString(fmt.Sprintf("Summary: %s\n", hook.op.Summary))
+	}
+
+	if hook.op.Description != "" {
+		details.WriteString(fmt.Sprintf("Description: %s\n", hook.op.Description))
+	}
+
+	if hook.op.OperationID != "" {
+		details.WriteString(fmt.Sprintf("Operation ID: %s\n", hook.op.OperationID))
 	}
 
 	return details.String()
