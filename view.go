@@ -239,7 +239,7 @@ func (m Model) renderHelpModal() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(colorThemePurple)).
 		Padding(1, 2).
-		Width(32)
+		Width(35)
 
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
