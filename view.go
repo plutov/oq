@@ -209,6 +209,8 @@ func (m Model) renderHelpModal() string {
 	helpData := [][]string{
 		{"↑/k", "Move up"},
 		{"↓/j", "Move down"},
+		{"gg", "Move to the top"},
+		{"G", "Move to the bottom"},
 		{"Tab", "Switch views"},
 		{"Enter/Space", "Toggle details"},
 		{"?", "Toggle help"},

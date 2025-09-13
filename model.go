@@ -2,6 +2,7 @@ package main
 
 import (
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/getkin/kin-openapi/openapi3"
@@ -13,6 +14,8 @@ const (
 	viewEndpoints viewMode = iota
 	viewComponents
 )
+
+const keySequenceThreshold = 500 * time.Millisecond
 
 type endpoint struct {
 	path   string
@@ -38,6 +41,8 @@ type Model struct {
 	width      int
 	height     int
 	showHelp   bool
+	lastKey    string
+	lastKeyAt  time.Time
 }
 
 func NewModel(doc *openapi3.T) Model {
@@ -100,15 +105,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "down", "j":
 			if !m.showHelp {
-				maxItems := 0
-				if m.mode == viewEndpoints {
-					maxItems = len(m.endpoints) - 1
-				} else {
+				maxItems := len(m.endpoints) - 1
+				if m.mode == viewComponents {
 					maxItems = len(m.components) - 1
 				}
+
 				if m.cursor < maxItems {
 					m.cursor++
 				}
+			}
+
+		case "G":
+			if !m.showHelp {
+				maxItems := len(m.endpoints) - 1
+				if m.mode == viewComponents {
+					maxItems = len(m.components) - 1
+				}
+
+				if maxItems >= 0 {
+					m.cursor = maxItems
+				} else {
+					maxItems = 0
+				}
+			}
+
+		case "g":
+			now := time.Now()
+			if m.lastKey == "g" && now.Sub(m.lastKeyAt) < keySequenceThreshold {
+				if !m.showHelp {
+					m.cursor = 0
+				}
+
+				// reset, so "ggg" wouldn't be triggered
+				m.lastKey = ""
+				m.lastKeyAt = time.Time{}
+
+			} else {
+				m.lastKey = "g"
+				m.lastKeyAt = now
 			}
 
 		case "enter", " ":
