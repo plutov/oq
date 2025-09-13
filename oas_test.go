@@ -324,7 +324,7 @@ func TestFormatSchemaDetails30(t *testing.T) {
 		t.Fatal("User schema not found")
 	}
 
-	details := formatSchemaDetails("User", userSchema.Value)
+	details := formatSchemaDetails(userSchema.Value)
 
 	if !strings.Contains(details, "Type: object") {
 		t.Error("Expected 'Type: object' in schema details")
@@ -349,7 +349,7 @@ func TestFormatSchemaDetails31(t *testing.T) {
 		t.Fatal("User schema not found")
 	}
 
-	details := formatSchemaDetails("User", userSchema.Value)
+	details := formatSchemaDetails(userSchema.Value)
 
 	if !strings.Contains(details, "Type: object") {
 		t.Error("Expected 'Type: object' in schema details")

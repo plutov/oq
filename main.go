@@ -31,7 +31,6 @@ func main() {
 	}
 
 	loader := openapi3.NewLoader()
-	// Enable validation for both OpenAPI 3.0 and 3.1
 	loader.IsExternalRefsAllowed = true
 
 	// Parse webhooks from original content before conversion
@@ -40,7 +39,6 @@ func main() {
 	// Try to convert OpenAPI 3.1 to 3.0 if needed
 	convertedContent, err := convertOpenAPI31To30(content)
 	if err != nil {
-		// If conversion fails, try with original content
 		convertedContent = content
 	}
 
@@ -79,12 +77,10 @@ func parseWebhooksFromRawContent(content []byte) []webhook {
 		}
 	}
 
-	// Check if this is OpenAPI 3.1
 	if version, ok := spec["openapi"].(string); !ok || !strings.HasPrefix(version, "3.1") {
 		return webhooks
 	}
 
-	// Extract webhooks
 	if webhookData, ok := spec["webhooks"].(map[string]interface{}); ok {
 		webhooks = parseWebhooksFromData(webhookData)
 	}
