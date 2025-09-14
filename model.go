@@ -20,14 +20,24 @@ const keySequenceThreshold = 500 * time.Millisecond
 
 // Layout constants (shared with view.go)
 const (
+	// Height
+
 	headerApproxLines = 2 // Single line header + one empty line
 	footerApproxLines = 4
 	layoutBuffer      = 2 // Extra buffer to ensure header visibility
+
+	// Width
+
+	leftPaddingChars = 2 // "▶" + space
 )
 
 // calculateContentHeight returns the available height for content given the total viewport height
 func calculateContentHeight(totalHeight int) int {
 	return max(1, totalHeight-headerApproxLines-footerApproxLines-layoutBuffer)
+}
+
+func calculateContentWidth(totalWidth int) int {
+	return max(1, totalWidth-leftPaddingChars)
 }
 
 type webhook struct {

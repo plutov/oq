@@ -35,8 +35,9 @@ func (m Model) renderEndpoints() string {
 		"TRACE":   colorGray,
 	}
 
-	// Calculate available content height using shared function
+	// Calculate available content height and width
 	contentHeight := calculateContentHeight(m.height)
+	contentWidth := calculateContentWidth(m.width)
 
 	startIdx := m.scrollOffset
 	endIdx := min(m.scrollOffset+contentHeight, len(m.endpoints))
@@ -53,9 +54,6 @@ func (m Model) renderEndpoints() string {
 	for i := startIdx; i < endIdx; i++ {
 		ep := m.endpoints[i]
 		style := lipgloss.NewStyle()
-		if i == m.cursor {
-			style = style.Background(lipgloss.Color(colorBackground))
-		}
 
 		methodColor := methodColors[ep.method]
 		if methodColor == "" {
@@ -67,17 +65,23 @@ func (m Model) renderEndpoints() string {
 			Bold(true).
 			Width(7)
 
+		if i == m.cursor {
+			style = style.Background(lipgloss.Color(colorBackground))
+			methodStyle = methodStyle.Background(lipgloss.Color(colorBackground))
+		}
+
 		foldIcon := "▶"
 		if !ep.folded {
 			foldIcon = "▼"
 		}
 
-		line := fmt.Sprintf("%s %s %s",
-			foldIcon,
-			methodStyle.Render(ep.method),
-			ep.path)
+		var line strings.Builder
+		line.WriteString(style.Render(foldIcon + " "))
+		line.WriteString(methodStyle.Render(ep.method))
+		line.WriteString(style.Render(" " + ep.path))
+		line.WriteString(style.Render(strings.Repeat(" ", contentWidth)))
 
-		s.WriteString(style.Render(line))
+		s.WriteString(style.Render(line.String()))
 		s.WriteString("\n")
 
 		if !ep.folded {
@@ -114,8 +118,9 @@ func (m Model) renderComponents() string {
 		"SecurityScheme": colorGray,
 	}
 
-	// Calculate available content height using shared function
+	// Calculate available content height and width
 	contentHeight := calculateContentHeight(m.height)
+	contentWidth := calculateContentWidth(m.width)
 
 	startIdx := m.scrollOffset
 	endIdx := min(m.scrollOffset+contentHeight, len(m.components))
@@ -132,9 +137,6 @@ func (m Model) renderComponents() string {
 	for i := startIdx; i < endIdx; i++ {
 		comp := m.components[i]
 		style := lipgloss.NewStyle()
-		if i == m.cursor {
-			style = style.Background(lipgloss.Color(colorBackground))
-		}
 
 		componentColor := componentColors[comp.compType]
 		if componentColor == "" {
@@ -146,21 +148,27 @@ func (m Model) renderComponents() string {
 			Bold(true).
 			Width(16)
 
+		if i == m.cursor {
+			style = style.Background(lipgloss.Color(colorBackground))
+			typeStyle = typeStyle.Background(lipgloss.Color(colorBackground))
+		}
+
 		foldIcon := "▶"
 		if !comp.folded {
 			foldIcon = "▼"
 		}
 
-		line := fmt.Sprintf("%s %s %s",
-			foldIcon,
-			typeStyle.Render(comp.compType+":"),
-			comp.name)
+		var line strings.Builder
+		line.WriteString(style.Render(foldIcon + " "))
+		line.WriteString(typeStyle.Render(comp.compType + ":"))
+		line.WriteString(style.Render(comp.name))
+		line.WriteString(style.Render(strings.Repeat(" ", contentWidth)))
 
 		if comp.description != "" {
-			line += fmt.Sprintf(" - %s", comp.description)
+			line.WriteString(style.Render(" - " + comp.description))
 		}
 
-		s.WriteString(style.Render(line))
+		s.WriteString(style.Render(line.String()))
 		s.WriteString("\n")
 
 		if !comp.folded {
@@ -198,8 +206,9 @@ func (m Model) renderWebhooks() string {
 		"TRACE":   colorGray,
 	}
 
-	// Calculate available content height using shared function
+	// Calculate available content height and width
 	contentHeight := calculateContentHeight(m.height)
+	contentWidth := calculateContentWidth(m.width)
 
 	startIdx := m.scrollOffset
 	endIdx := min(m.scrollOffset+contentHeight, len(m.webhooks))
@@ -216,9 +225,6 @@ func (m Model) renderWebhooks() string {
 	for i := startIdx; i < endIdx; i++ {
 		hook := m.webhooks[i]
 		style := lipgloss.NewStyle()
-		if i == m.cursor {
-			style = style.Background(lipgloss.Color(colorBackground))
-		}
 
 		methodColor := methodColors[hook.method]
 		if methodColor == "" {
@@ -230,17 +236,23 @@ func (m Model) renderWebhooks() string {
 			Bold(true).
 			Width(7)
 
+		if i == m.cursor {
+			style = style.Background(lipgloss.Color(colorBackground))
+			methodStyle = methodStyle.Background(lipgloss.Color(colorBackground))
+		}
+
 		foldIcon := "▶"
 		if !hook.folded {
 			foldIcon = "▼"
 		}
 
-		line := fmt.Sprintf("%s %s %s",
-			foldIcon,
-			methodStyle.Render(hook.method),
-			hook.name)
+		var line strings.Builder
+		line.WriteString(style.Render(foldIcon + " "))
+		line.WriteString(methodStyle.Render(hook.method + " "))
+		line.WriteString(style.Render(" " + hook.name))
+		line.WriteString(style.Render(strings.Repeat(" ", contentWidth)))
 
-		s.WriteString(style.Render(line))
+		s.WriteString(style.Render(line.String()))
 		s.WriteString("\n")
 
 		if !hook.folded {
