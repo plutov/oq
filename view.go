@@ -35,8 +35,8 @@ func (m Model) renderEndpoints() string {
 		"TRACE":   colorGray,
 	}
 
-	// header (~6 lines) + footer (~4 lines)
-	contentHeight := max(1, m.height-10)
+	// Calculate available content height using shared function
+	contentHeight := calculateContentHeight(m.height)
 
 	startIdx := m.scrollOffset
 	endIdx := min(m.scrollOffset+contentHeight, len(m.endpoints))
@@ -114,7 +114,8 @@ func (m Model) renderComponents() string {
 		"SecurityScheme": colorGray,
 	}
 
-	contentHeight := max(1, m.height-10)
+	// Calculate available content height using shared function
+	contentHeight := calculateContentHeight(m.height)
 
 	startIdx := m.scrollOffset
 	endIdx := min(m.scrollOffset+contentHeight, len(m.components))
@@ -197,8 +198,8 @@ func (m Model) renderWebhooks() string {
 		"TRACE":   colorGray,
 	}
 
-	// header (~6 lines) + footer (~4 lines)
-	contentHeight := max(1, m.height-10)
+	// Calculate available content height using shared function
+	contentHeight := calculateContentHeight(m.height)
 
 	startIdx := m.scrollOffset
 	endIdx := min(m.scrollOffset+contentHeight, len(m.webhooks))
