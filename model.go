@@ -244,20 +244,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.lastKey = "g"
 				m.lastKeyAt = now
 			}
-		case tea.KeySpace.String():
+		case " ":
 			if !m.showHelp && !m.showSearch {
-				if m.mode == viewEndpoints && m.cursor < len(m.endpoints) {
-					m.endpoints[m.cursor].folded = !m.endpoints[m.cursor].folded
-				} else if m.mode == viewComponents && m.cursor < len(m.components) {
-					m.components[m.cursor].folded = !m.components[m.cursor].folded
-				} else if m.mode == viewWebhooks && m.cursor < len(m.webhooks) {
-					m.webhooks[m.cursor].folded = !m.webhooks[m.cursor].folded
-				}
+				m.unfoldEntry()
 			}
-			// If we were not in "search mode", handle the logic as expected
-			fallthrough
+
 		case "enter":
-			// if we set it before we would still trigger the "expand" of a node
+			if !m.showHelp && !m.showSearch {
+				m.unfoldEntry()
+			}
+
 			if m.showSearch {
 				m.showSearch = false
 			}
@@ -266,6 +262,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	m.searchInput, cmd = m.searchInput.Update(msg)
 	return m, cmd
+}
+
+// unfoldEntrie, unfolds a entry under cursor
+// NOTE: this mutates the [Model]
+func (m *Model) unfoldEntry() {
+	if m.mode == viewEndpoints && m.cursor < len(m.endpoints) {
+		m.endpoints[m.cursor].folded = !m.endpoints[m.cursor].folded
+	} else if m.mode == viewComponents && m.cursor < len(m.components) {
+		m.components[m.cursor].folded = !m.components[m.cursor].folded
+	} else if m.mode == viewWebhooks && m.cursor < len(m.webhooks) {
+		m.webhooks[m.cursor].folded = !m.webhooks[m.cursor].folded
+	}
 }
 
 func (m Model) View() string {
