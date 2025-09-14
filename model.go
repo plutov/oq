@@ -20,7 +20,7 @@ const keySequenceThreshold = 500 * time.Millisecond
 
 // Layout constants (shared with view.go)
 const (
-	headerApproxLines = 6
+	headerApproxLines = 2 // Single line header + one empty line
 	footerApproxLines = 4
 	layoutBuffer      = 2 // Extra buffer to ensure header visibility
 )

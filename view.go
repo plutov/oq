@@ -266,55 +266,71 @@ func (m Model) renderWebhooks() string {
 }
 
 func (m Model) renderHeader() string {
+	// Button styles for navigation
+	buttonStyle := lipgloss.NewStyle().
+		Padding(0, 1).
+		Foreground(lipgloss.Color(colorGray))
+
+	activeButtonStyle := buttonStyle.
+		Background(lipgloss.Color(colorThemePurple)).
+		Foreground(lipgloss.Color(colorWhite)).
+		Bold(true)
+
+	// App title style for right side
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color(colorThemePurple)).
-		PaddingBottom(1)
-
-	tabStyle := lipgloss.NewStyle().
-		Padding(0, 2).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(colorGray))
-
-	activeTabStyle := tabStyle.
-		BorderForeground(lipgloss.Color(colorThemePurple)).
 		Foreground(lipgloss.Color(colorThemePurple))
 
-	var header strings.Builder
-	header.WriteString(titleStyle.Render("oq - OpenAPI Spec Viewer"))
-	header.WriteString("\n")
+	// Build navigation buttons
+	var buttons []string
 
-	endpointsTab := "Endpoints"
-	componentsTab := "Components"
-	webhooksTab := "Webhooks"
-
-	// Build tab array based on what's available
-	var tabs []string
-
+	// Endpoints button
 	if m.mode == viewEndpoints {
-		tabs = append(tabs, activeTabStyle.Render(endpointsTab))
+		buttons = append(buttons, activeButtonStyle.Render("Requests"))
 	} else {
-		tabs = append(tabs, tabStyle.Render(endpointsTab))
+		buttons = append(buttons, buttonStyle.Render("Requests"))
 	}
 
+	// Webhooks button (only if available)
 	if m.hasWebhooks() {
 		if m.mode == viewWebhooks {
-			tabs = append(tabs, activeTabStyle.Render(webhooksTab))
+			buttons = append(buttons, activeButtonStyle.Render("Webhooks"))
 		} else {
-			tabs = append(tabs, tabStyle.Render(webhooksTab))
+			buttons = append(buttons, buttonStyle.Render("Webhooks"))
 		}
 	}
 
+	// Components button
 	if m.mode == viewComponents {
-		tabs = append(tabs, activeTabStyle.Render(componentsTab))
+		buttons = append(buttons, activeButtonStyle.Render("Components"))
 	} else {
-		tabs = append(tabs, tabStyle.Render(componentsTab))
+		buttons = append(buttons, buttonStyle.Render("Components"))
 	}
 
-	header.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, tabs...))
-	header.WriteString("\n\n")
+	// Join buttons with separators
+	navSection := strings.Join(buttons, " │ ")
 
-	return header.String()
+	// App title for right side
+	appTitle := titleStyle.Render("oq - OpenAPI Spec Viewer")
+
+	// Calculate total width for proper spacing
+	navWidth := lipgloss.Width(navSection)
+	titleWidth := lipgloss.Width(appTitle)
+	totalContentWidth := navWidth + titleWidth
+
+	// Create the header line with proper spacing
+	var headerLine string
+	if m.width > totalContentWidth+4 { // 4 for some padding
+		spacingWidth := m.width - totalContentWidth
+		spacing := strings.Repeat(" ", spacingWidth)
+		headerLine = navSection + spacing + appTitle
+	} else {
+		// If not enough space, just show navigation and truncate title if needed
+		headerLine = navSection
+	}
+
+	// Return header with one empty line below
+	return headerLine + "\n\n"
 }
 
 func (m Model) renderFooter() string {
