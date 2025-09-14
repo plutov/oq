@@ -67,6 +67,44 @@ type Model struct {
 	scrollOffset int
 }
 
+func (m *Model) getItemHeight(index int) int {
+	switch m.mode {
+	case viewEndpoints:
+		if index >= len(m.endpoints) {
+			return 1
+		}
+		ep := m.endpoints[index]
+		if ep.folded {
+			return 1 // Just the main line when folded
+		}
+		// When unfolded, count main line + detail lines
+		details := formatEndpointDetails(ep)
+		return 1 + strings.Count(details, "\n") + 1 // +1 for main line, +1 for the detail section
+	case viewComponents:
+		if index >= len(m.components) {
+			return 1
+		}
+		comp := m.components[index]
+		if comp.folded {
+			return 1 // Just the main line when folded
+		}
+		// When unfolded, count main line + detail lines
+		return 1 + strings.Count(comp.details, "\n") + 1 // +1 for main line, +1 for the detail section
+	case viewWebhooks:
+		if index >= len(m.webhooks) {
+			return 1
+		}
+		hook := m.webhooks[index]
+		if hook.folded {
+			return 1 // Just the main line when folded
+		}
+		// When unfolded, count main line + detail lines
+		details := formatWebhookDetails(hook)
+		return 1 + strings.Count(details, "\n") + 1 // +1 for main line, +1 for the detail section
+	}
+	return 1
+}
+
 func (m *Model) ensureCursorVisible() {
 	// Calculate available content height using shared function
 	contentHeight := calculateContentHeight(m.height)
@@ -77,12 +115,67 @@ func (m *Model) ensureCursorVisible() {
 		return
 	}
 
-	// For simplicity, treat each item as taking 1 line for visibility calculations
-	// The actual rendering will handle multi-line items
+	// Calculate the actual rendered height of items to properly handle viewport
+	var items []interface{}
+	switch m.mode {
+	case viewEndpoints:
+		for i := range m.endpoints {
+			items = append(items, m.endpoints[i])
+		}
+	case viewComponents:
+		for i := range m.components {
+			items = append(items, m.components[i])
+		}
+	case viewWebhooks:
+		for i := range m.webhooks {
+			items = append(items, m.webhooks[i])
+		}
+	}
+
+	if len(items) == 0 {
+		return
+	}
+
+	// Calculate lines used by items from scrollOffset to cursor
+	linesUsed := 0
+
+	// If cursor is above current scroll position, scroll up to show it
 	if m.cursor < m.scrollOffset {
 		m.scrollOffset = m.cursor
-	} else if m.cursor >= m.scrollOffset+contentHeight {
-		m.scrollOffset = m.cursor - contentHeight + 1
+		return
+	}
+
+	// Calculate how many lines are used from scrollOffset to cursor (inclusive)
+	for i := m.scrollOffset; i <= m.cursor && i < len(items); i++ {
+		linesUsed += m.getItemHeight(i)
+	}
+
+	// Account for scroll indicators
+	if m.scrollOffset > 0 {
+		linesUsed++ // "More items above" indicator
+	}
+
+	// If the cursor item extends beyond available content height, scroll down
+	if linesUsed > contentHeight {
+		// Find the minimum scroll offset that keeps cursor visible
+		for newScrollOffset := m.scrollOffset + 1; newScrollOffset <= m.cursor; newScrollOffset++ {
+			testLinesUsed := 0
+
+			// Account for "More items above" indicator
+			if newScrollOffset > 0 {
+				testLinesUsed++
+			}
+
+			// Calculate lines from new scroll offset to cursor
+			for i := newScrollOffset; i <= m.cursor && i < len(items); i++ {
+				testLinesUsed += m.getItemHeight(i)
+			}
+
+			if testLinesUsed <= contentHeight {
+				m.scrollOffset = newScrollOffset
+				break
+			}
+		}
 	}
 
 	// Ensure scroll offset doesn't go negative
