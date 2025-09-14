@@ -4,7 +4,7 @@ Set FontSize 20
 Set Width 1200
 Set Height 800
 
-Type "oq example.yaml"
+Type "oq examples/discord.json"
 
 Sleep 1s
 
@@ -24,7 +24,7 @@ Sleep 200ms
 
 Tab
 
-Down 3
+Down 6
 
 Sleep 1s
 

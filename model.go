@@ -18,6 +18,18 @@ const (
 
 const keySequenceThreshold = 500 * time.Millisecond
 
+// Layout constants (shared with view.go)
+const (
+	headerApproxLines = 2 // Single line header + one empty line
+	footerApproxLines = 4
+	layoutBuffer      = 2 // Extra buffer to ensure header visibility
+)
+
+// calculateContentHeight returns the available height for content given the total viewport height
+func calculateContentHeight(totalHeight int) int {
+	return max(1, totalHeight-headerApproxLines-footerApproxLines-layoutBuffer)
+}
+
 type webhook struct {
 	name   string
 	method string
@@ -56,8 +68,14 @@ type Model struct {
 }
 
 func (m *Model) ensureCursorVisible() {
-	// header (~6 lines) + footer (~4 lines)
-	contentHeight := max(1, m.height-10)
+	// Calculate available content height using shared function
+	contentHeight := calculateContentHeight(m.height)
+
+	// Special case: if cursor is at 0, ensure we scroll to the very top
+	if m.cursor == 0 {
+		m.scrollOffset = 0
+		return
+	}
 
 	// For simplicity, treat each item as taking 1 line for visibility calculations
 	// The actual rendering will handle multi-line items
@@ -235,12 +253,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// truncateContent ensures content doesn't exceed the available lines
+func (m Model) truncateContent(content string, maxLines int) string {
+	lines := strings.Split(content, "\n")
+	if len(lines) <= maxLines {
+		return content
+	}
+
+	// Truncate to fit and add an indicator
+	truncatedLines := lines[:maxLines-1]
+	truncatedLines = append(truncatedLines, "⬇ Content truncated to fit viewport...")
+
+	return strings.Join(truncatedLines, "\n")
+}
+
 func (m Model) View() string {
 	var s strings.Builder
 
 	header := m.renderHeader()
-	s.WriteString(header)
+	footer := m.renderFooter()
 
+	headerLines := strings.Count(header, "\n")
+	footerLines := strings.Count(footer, "\n")
+
+	// Calculate how many lines are available for content
+	availableContentLines := m.height - headerLines - footerLines - 1
+	if availableContentLines < 1 {
+		availableContentLines = 1
+	}
+
+	// Render content
 	var content string
 	switch m.mode {
 	case viewEndpoints:
@@ -250,14 +292,14 @@ func (m Model) View() string {
 	case viewWebhooks:
 		content = m.renderWebhooks()
 	}
+
+	// Truncate content if it's too long
+	content = m.truncateContent(content, availableContentLines)
+
+	s.WriteString(header)
 	s.WriteString(content)
 
-	footer := m.renderFooter()
-
-	headerLines := strings.Count(header, "\n")
 	contentLines := strings.Count(content, "\n")
-	footerLines := strings.Count(footer, "\n")
-
 	usedLines := headerLines + contentLines + footerLines
 	remainingLines := m.height - usedLines - 1
 
