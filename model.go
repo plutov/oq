@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/getkin/kin-openapi/openapi3"
 )
@@ -49,6 +50,8 @@ type Model struct {
 	mode         viewMode
 	width        int
 	height       int
+	showSearch   bool
+	searchInput  textinput.Model
 	showHelp     bool
 	lastKey      string
 	lastKeyAt    time.Time
@@ -96,6 +99,9 @@ func NewModelWithWebhooks(doc *openapi3.T, webhooks []webhook) Model {
 	endpoints := extractEndpoints(doc)
 	components := extractComponents(doc)
 
+	searchInput := textinput.New()
+	searchInput.Placeholder = "Search"
+
 	return Model{
 		doc:          doc,
 		endpoints:    endpoints,
@@ -103,6 +109,7 @@ func NewModelWithWebhooks(doc *openapi3.T, webhooks []webhook) Model {
 		webhooks:     webhooks,
 		cursor:       0,
 		mode:         viewEndpoints,
+		searchInput:  searchInput,
 		width:        80,
 		height:       24,
 		showHelp:     false,
@@ -119,6 +126,8 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -127,22 +136,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
+			if !m.showHelp && !m.showSearch {
+				return m, tea.Quit
+			}
+
 			if m.showHelp {
 				m.showHelp = false
-			} else {
-				return m, tea.Quit
 			}
 
 		case "?":
 			m.showHelp = !m.showHelp
 
+		case "/":
+			// 1. show the input field on the status line
+			m.searchInput.SetValue("")
+			m.showSearch = !m.showSearch
+			if m.showSearch {
+				m.searchInput.Focus()
+			}
+
+			// 2. based on input 'ed text perform search
+			// 3. highlight search entrances
+			// 4. support 'n' and "N" for jumping
+
 		case "esc":
 			if m.showHelp {
 				m.showHelp = false
+			} else if m.showSearch {
+				m.showSearch = false
+				// TODO: clear text input?
 			}
 
 		case "tab":
-			if !m.showHelp {
+			if !m.showHelp && !m.showSearch {
 				// Cycle through available views
 				switch m.mode {
 				case viewEndpoints:
@@ -161,13 +187,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "up", "k":
-			if !m.showHelp && m.cursor > 0 {
+			if !m.showHelp && !m.showSearch && m.cursor > 0 {
 				m.cursor--
 				m.ensureCursorVisible()
 			}
 
 		case "down", "j":
-			if !m.showHelp {
+			if !m.showHelp && !m.showSearch {
 				var maxItems int
 				switch m.mode {
 				case viewEndpoints:
@@ -185,7 +211,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "G":
-			if !m.showHelp {
+			if !m.showHelp && !m.showSearch {
 				var maxItems int
 				switch m.mode {
 				case viewEndpoints:
@@ -218,9 +244,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.lastKey = "g"
 				m.lastKeyAt = now
 			}
-
-		case "enter", " ":
-			if !m.showHelp {
+		case tea.KeySpace.String():
+			if !m.showHelp && !m.showSearch {
 				if m.mode == viewEndpoints && m.cursor < len(m.endpoints) {
 					m.endpoints[m.cursor].folded = !m.endpoints[m.cursor].folded
 				} else if m.mode == viewComponents && m.cursor < len(m.components) {
@@ -229,10 +254,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.webhooks[m.cursor].folded = !m.webhooks[m.cursor].folded
 				}
 			}
+			// If we were not in "search mode", handle the logic as expected
+			fallthrough
+		case "enter":
+			// if we set it before we would still trigger the "expand" of a node
+			if m.showSearch {
+				m.showSearch = false
+			}
 		}
 	}
 
-	return m, nil
+	m.searchInput, cmd = m.searchInput.Update(msg)
+	return m, cmd
 }
 
 func (m Model) View() string {

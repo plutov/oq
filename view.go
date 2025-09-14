@@ -316,20 +316,33 @@ func (m Model) renderHeader() string {
 	return header.String()
 }
 
-func (m Model) renderFooter() string {
-	schemaInfo := fmt.Sprintf("%s v%s", m.doc.Info.Title, m.doc.Info.Version)
-
-	helpText := "Press '?' for help"
-	if m.showHelp {
-		helpText = ""
-	}
-
-	footerStyle := lipgloss.NewStyle().
+func (m Model) getFooterStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
 		Background(lipgloss.Color(colorGray)).
 		Foreground(lipgloss.Color(colorFooterText)).
 		Padding(0, 1).
 		Width(m.width).
 		Align(lipgloss.Left)
+}
+
+func (m Model) renderFooter() string {
+	if m.showSearch {
+		return m.renderSearchFooter()
+	}
+	return m.renderHelpFooter()
+}
+
+func (m Model) renderSearchFooter() string {
+	return "\n" + m.getFooterStyle().Render(m.searchInput.View())
+}
+
+func (m Model) renderHelpFooter() string {
+	schemaInfo := fmt.Sprintf("%s v%s", m.doc.Info.Title, m.doc.Info.Version)
+
+	helpText := "Press '?' for help, '/' for search"
+	if m.showHelp {
+		helpText = ""
+	}
 
 	availableWidth := m.width - len(schemaInfo) - 4
 	if len(helpText) > availableWidth {
@@ -341,7 +354,7 @@ func (m Model) renderFooter() string {
 		strings.Repeat(" ", m.width-len(helpText)-len(schemaInfo)-2),
 		schemaInfo)
 
-	return "\n" + footerStyle.Render(footerContent)
+	return "\n" + m.getFooterStyle().Render(footerContent)
 }
 
 func (m Model) renderHelpModal() string {
