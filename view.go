@@ -357,7 +357,8 @@ func (m Model) renderHelpModal() string {
 		{"↓/j", "Move down"},
 		{"gg", "Move to the top"},
 		{"G", "Move to the bottom"},
-		{"Tab", "Switch views"},
+		{"Tab/L", "Cycle forward through views"},
+		{"Shift+Tab/H", "Cycle backwards through views"},
 		{"Enter/Space", "Toggle details"},
 		{"?", "Toggle help"},
 		{"Esc/q", "Close help"},
@@ -385,7 +386,7 @@ func (m Model) renderHelpModal() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(colorThemePurple)).
 		Padding(1, 2).
-		Width(35)
+		Width(45)
 
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).

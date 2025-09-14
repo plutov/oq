@@ -141,9 +141,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.showHelp = false
 			}
 
-		case "tab":
+		case "tab", "L":
 			if !m.showHelp {
-				// Cycle through available views
+				// Cycle forward through available views
 				switch m.mode {
 				case viewEndpoints:
 					if m.hasWebhooks() {
@@ -155,6 +155,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.mode = viewComponents
 				case viewComponents:
 					m.mode = viewEndpoints
+				}
+				m.cursor = 0
+				m.scrollOffset = 0
+			}
+
+		case "shift+tab", "H":
+			if !m.showHelp {
+				// Cycle backwards through available views
+				switch m.mode {
+				case viewEndpoints:
+					m.mode = viewComponents
+				case viewWebhooks:
+					m.mode = viewEndpoints
+				case viewComponents:
+					if m.hasWebhooks() {
+						m.mode = viewWebhooks
+					} else {
+						m.mode = viewEndpoints
+					}
 				}
 				m.cursor = 0
 				m.scrollOffset = 0
