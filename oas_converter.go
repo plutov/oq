@@ -129,6 +129,35 @@ func processMap(m map[string]interface{}) {
 		}
 	}
 
+	// Ensure array schemas have items (required in OpenAPI 3.0)
+	if schemaType, ok := m["type"].(string); ok && schemaType == "array" {
+		if _, hasItems := m["items"]; !hasItems {
+			// Add a generic items schema to satisfy OpenAPI 3.0 validation
+			m["items"] = map[string]interface{}{
+				"type": "object",
+			}
+		}
+	}
+
+	// Handle $recursiveRef by removing it (simple workaround)
+	// This removes the recursive reference capability but prevents validation errors
+	if _, ok := m["$recursiveRef"]; ok {
+		delete(m, "$recursiveRef")
+	}
+
+	// Convert snake_case to camelCase for array validation keywords
+	if maxItems, ok := m["max_items"]; ok {
+		m["maxItems"] = maxItems
+		delete(m, "max_items")
+	}
+	if minItems, ok := m["min_items"]; ok {
+		m["minItems"] = minItems
+		delete(m, "min_items")
+	}
+
+	// Remove $recursiveAnchor as it's not supported in OpenAPI 3.0
+	delete(m, "$recursiveAnchor")
+
 	// Remove OpenAPI 3.1 specific fields that are not supported in 3.0
 	openapi31Fields := []string{
 		"$schema",
@@ -149,6 +178,7 @@ func processMap(m map[string]interface{}) {
 		"contentEncoding",  // JSON Schema feature not supported in OpenAPI 3.0
 		"contentMediaType", // JSON Schema feature not supported in OpenAPI 3.0
 		"contentSchema",    // JSON Schema feature not supported in OpenAPI 3.0
+		"optional",         // OpenAPI 3.1 field not supported in 3.0
 	}
 	for _, field := range openapi31Fields {
 		delete(m, field)
