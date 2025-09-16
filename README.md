@@ -27,6 +27,14 @@ Both JSON and YAML formats are supported.
 
 ## Installation
 
+Using Homebrew (macOS/Linux):
+
+```bash
+brew install plutov/tap/oq
+```
+
+Or using go install:
+
 ```bash
 go install github.com/plutov/oq@latest
 ```
