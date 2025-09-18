@@ -31,8 +31,6 @@ homebrew_casks:
     binary: oq
     description: "Terminal OpenAPI Spec viewer"
     homepage: https://github.com/plutov/oq
-    url:
-      template: "https://github.com/plutov/oq/releases/tag/{{ .Tag }}"
     repository:
       owner: plutov
       name: homebrew-tap
