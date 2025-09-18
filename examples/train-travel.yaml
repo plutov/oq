@@ -1,150 +1,84 @@
 openapi: 3.1.0
 info:
   title: Train Travel API
-  description: |
-    API for finding and booking train trips across Europe.
-
-    ## Run in Postman
-
-    Experiment with this API in Postman, using our Postman Collection.
-
-    [![Run In Postman](https://run.pstmn.io/button.svg =128pxx32px)](https://app.getpostman.com/run-collection/9265903-7a75a0d0-b108-4436-ba54-c6139698dc08?action=collection%2Ffork&source=rip_markdown&collection-url=entityId%3D9265903-7a75a0d0-b108-4436-ba54-c6139698dc08%26entityType%3Dcollection%26workspaceId%3Df507f69d-9564-419c-89a2-cb8e4c8c7b8f)
-  version: 1.2.1
+  description: API for finding and booking train trips across Europe.\n\nThis API definition was ported over from https://github.com/bump-sh-examples/train-travel-api.
+  version: 1.0.0
   contact:
     name: Train Support
-    url: "https://example.com/support"
+    url: https://example.com/support
     email: support@example.com
   license:
     name: Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International
     identifier: CC-BY-NC-SA-4.0
-  x-feedbackLink:
-    label: Submit Feedback
-    url: "https://github.com/bump-sh-examples/train-travel-api/issues/new"
 servers:
-  - url: "https://try.microcks.io/rest/Train+Travel+API/1.0.0"
-    description: Mock Server
-    x-internal: false
-  - url: "https://api.example.com"
+  - url: https://api.example.com
     description: Production
-    x-internal: false
-x-speakeasy-retries:
-  strategy: backoff
-  backoff:
-    initialInterval: 500
-    maxInterval: 60000
-    maxElapsedTime: 3600000
-    exponent: 1.5
-  statusCodes:
-    - 5XX
-  retryConnectionErrors: true
 security:
   - OAuth2:
       - read
-x-topics:
-  - title: Getting started
-    content:
-      $ref: ./docs/getting-started.md
 tags:
   - name: Stations
-    description: |
-      Find and filter train stations across Europe, including their location
-      and local timezone.
+    description: Find and filter train stations across Europe, including their location  and local timezone.
   - name: Trips
-    description: |
-      Timetables and routes for train trips between stations, including pricing
-      and availability.
+    description: Timetables and routes for train trips between stations, including  pricing and availability.
   - name: Bookings
-    description: |
-      Create and manage bookings for train trips, including passenger details
-      and optional extras.
+    description: Create and manage bookings for train trips, including passenger  details and optional extras.
   - name: Payments
     description: |
       Pay for bookings using a card or bank account, and view payment
       status and history.
 
       > warn
-      > Bookings usually expire within 1 hour so you'll need to make your payment
-      > before the expiry date
+      > Bookings usually expire within 1 hour so you'll need to make your payment before the expiry date
 paths:
   /stations:
     get:
       summary: Get a list of train stations
-      description: Returns a paginated and searchable list of all train stations.
+      description: Returns a list of all train stations in the system.
       operationId: get-stations
       tags:
         - Stations
-      parameters:
-        - $ref: "#/components/parameters/page"
-        - $ref: "#/components/parameters/limit"
-        - name: coordinates
-          in: query
-          description: |
-            The latitude and longitude of the user's location, to narrow down the search results to sites within a proximity of this location.
-          required: false
-          schema:
-            type: string
-          example: "52.5200,13.4050"
-        - name: search
-          in: query
-          description: |
-            A search term to filter the list of stations by name or address.
-          required: false
-          schema:
-            type: string
-            examples:
-              - Milano Centrale
-              - Paris
-        - name: country
-          in: query
-          description: Filter stations by country code
-          required: false
-          schema:
-            type: string
-            format: iso-country-code
-          example: DE
       responses:
-        "200":
-          description: OK
+        '200':
+          description: A list of train stations
           headers:
-            Cache-Control:
-              $ref: "#/components/headers/Cache-Control"
             RateLimit:
-              $ref: "#/components/headers/RateLimit"
+              $ref: '#/components/headers/RateLimit'
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: "#/components/schemas/Wrapper-Collection"
+                  - $ref: '#/components/schemas/Wrapper-Collection'
                   - properties:
                       data:
                         type: array
                         items:
-                          $ref: "#/components/schemas/Station"
+                          $ref: '#/components/schemas/Station'
                   - properties:
                       links:
                         allOf:
-                          - $ref: "#/components/schemas/Links-Self"
-                          - $ref: "#/components/schemas/Links-Pagination"
+                          - $ref: '#/components/schemas/Links-Self'
+                          - $ref: '#/components/schemas/Links-Pagination'
               example:
                 data:
                   - id: efdbb9d1-02c2-4bc3-afb7-6788d8782b1e
                     name: Berlin Hauptbahnhof
-                    address: "Invalidenstraße 10557 Berlin, Germany"
+                    address: Invalidenstraße 10557 Berlin, Germany
                     country_code: DE
                     timezone: Europe/Berlin
                   - id: b2e783e1-c824-4d63-b37a-d8d698862f1d
                     name: Paris Gare du Nord
-                    address: "18 Rue de Dunkerque 75010 Paris, France"
+                    address: 18 Rue de Dunkerque 75010 Paris, France
                     country_code: FR
                     timezone: Europe/Paris
                 links:
-                  self: "https://api.example.com/stations&page=2"
-                  next: "https://api.example.com/stations?page=3"
-                  prev: "https://api.example.com/stations?page=1"
+                  self: https://api.example.com/stations&page=2
+                  next: https://api.example.com/stations?page=3
+                  prev: https://api.example.com/stations?page=1
             application/xml:
               schema:
                 allOf:
-                  - $ref: "#/components/schemas/Wrapper-Collection"
+                  - $ref: '#/components/schemas/Wrapper-Collection'
                   - properties:
                       data:
                         type: array
@@ -152,54 +86,30 @@ paths:
                           name: stations
                           wrapped: true
                         items:
-                          $ref: "#/components/schemas/Station"
+                          $ref: '#/components/schemas/Station'
                   - properties:
                       links:
                         allOf:
-                          - $ref: "#/components/schemas/Links-Self"
-                          - $ref: "#/components/schemas/Links-Pagination"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
-        "500":
-          $ref: "#/components/responses/InternalServerError"
-      x-codeSamples:
-        - lang: typescript
-          label: get-stations
-          source: |-
-            import { TrainTravelSDK } from "train-travel-sdk";
-
-            const trainTravelSDK = new TrainTravelSDK({
-              oAuth2: process.env["TRAINTRAVELSDK_O_AUTH2"] ?? "",
-            });
-
-            async function run() {
-              const result = await trainTravelSDK.stations.list({
-                coordinates: "52.5200,13.4050",
-                search: "Milano Centrale",
-                country: "DE",
-              });
-
-              console.log(result);
-            }
-
-            run();
+                          - $ref: '#/components/schemas/Links-Self'
+                          - $ref: '#/components/schemas/Links-Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /trips:
     get:
       summary: Get available train trips
-      description: |
-        Returns a list of available train trips between the specified origin and destination stations on the given date, and allows for filtering by bicycle and dog allowances.
+      description: Returns a list of available train trips between the specified origin and destination stations on the given date, and allows for filtering by bicycle and dog allowances.
       operationId: get-trips
       tags:
         - Trips
       parameters:
-        - $ref: "#/components/parameters/page"
-        - $ref: "#/components/parameters/limit"
         - name: origin
           in: query
           description: The ID of the origin station
@@ -223,7 +133,7 @@ paths:
           schema:
             type: string
             format: date-time
-          example: "2024-02-01T09:00:00Z"
+          example: '2024-02-01T09:00:00Z'
         - name: bicycles
           in: query
           description: Only return trips where bicycles are known to be allowed
@@ -239,66 +149,53 @@ paths:
             type: boolean
             default: false
       responses:
-        "200":
+        '200':
           description: A list of available train trips
           headers:
-            Cache-Control:
-              $ref: "#/components/headers/Cache-Control"
             RateLimit:
-              $ref: "#/components/headers/RateLimit"
+              $ref: '#/components/headers/RateLimit'
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: "#/components/schemas/Wrapper-Collection"
+                  - $ref: '#/components/schemas/Wrapper-Collection'
                   - properties:
                       data:
                         type: array
                         items:
-                          allOf:
-                            - $ref: "#/components/schemas/Trip"
-                            - $ref: "#/components/schemas/Links-Origin"
-                            - $ref: "#/components/schemas/Links-Destination"
+                          $ref: '#/components/schemas/Trip'
                   - properties:
                       links:
                         allOf:
-                          - $ref: "#/components/schemas/Links-Self"
-                          - $ref: "#/components/schemas/Links-Pagination"
+                          - $ref: '#/components/schemas/Links-Self'
+                          - $ref: '#/components/schemas/Links-Pagination'
               example:
                 data:
                   - id: ea399ba1-6d95-433f-92d1-83f67b775594
                     origin: efdbb9d1-02c2-4bc3-afb7-6788d8782b1e
                     destination: b2e783e1-c824-4d63-b37a-d8d698862f1d
-                    departure_time: "2024-02-01T10:00:00Z"
-                    arrival_time: "2024-02-01T16:00:00Z"
+                    departure_time: '2024-02-01T10:00:00Z'
+                    arrival_time: '2024-02-01T16:00:00Z'
                     price: 50
                     operator: Deutsche Bahn
                     bicycles_allowed: true
                     dogs_allowed: true
-                    links:
-                      self: "https://api.example.com/trips/ea399ba1-6d95-433f-92d1-83f67b775594"
-                      origin: "https://api.example.com/stations/efdbb9d1-02c2-4bc3-afb7-6788d8782b1e"
-                      destination: "https://api.example.com/stations/b2e783e1-c824-4d63-b37a-d8d698862f1d"
                   - id: 4d67459c-af07-40bb-bb12-178dbb88e09f
                     origin: b2e783e1-c824-4d63-b37a-d8d698862f1d
                     destination: efdbb9d1-02c2-4bc3-afb7-6788d8782b1e
-                    departure_time: "2024-02-01T12:00:00Z"
-                    arrival_time: "2024-02-01T18:00:00Z"
+                    departure_time: '2024-02-01T12:00:00Z'
+                    arrival_time: '2024-02-01T18:00:00Z'
                     price: 50
                     operator: SNCF
                     bicycles_allowed: true
                     dogs_allowed: true
-                    links:
-                      self: "https://api.example.com/trips/4d67459c-af07-40bb-bb12-178dbb88e09f"
-                      origin: "https://api.example.com/stations/b2e783e1-c824-4d63-b37a-d8d698862f1d"
-                      destination: "https://api.example.com/stations/efdbb9d1-02c2-4bc3-afb7-6788d8782b1e"
                 links:
-                  self: "https://api.example.com/trips?origin=efdbb9d1-02c2-4bc3-afb7-6788d8782b1e&destination=b2e783e1-c824-4d63-b37a-d8d698862f1d&date=2024-02-01"
-                  next: "https://api.example.com/trips?origin=efdbb9d1-02c2-4bc3-afb7-6788d8782b1e&destination=b2e783e1-c824-4d63-b37a-d8d698862f1d&date=2024-02-01&page=2"
+                  self: https://api.example.com/trips?origin=efdbb9d1-02c2-4bc3-afb7-6788d8782b1e&destination=b2e783e1-c824-4d63-b37a-d8d698862f1d&date=2024-02-01
+                  next: https://api.example.com/trips?origin=efdbb9d1-02c2-4bc3-afb7-6788d8782b1e&destination=b2e783e1-c824-4d63-b37a-d8d698862f1d&date=2024-02-01&page=2
             application/xml:
               schema:
                 allOf:
-                  - $ref: "#/components/schemas/Wrapper-Collection"
+                  - $ref: '#/components/schemas/Wrapper-Collection'
                   - properties:
                       data:
                         type: array
@@ -306,76 +203,50 @@ paths:
                           name: trips
                           wrapped: true
                         items:
-                          $ref: "#/components/schemas/Trip"
+                          $ref: '#/components/schemas/Trip'
                   - properties:
                       links:
                         allOf:
-                          - $ref: "#/components/schemas/Links-Self"
-                          - $ref: "#/components/schemas/Links-Pagination"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
-        "500":
-          $ref: "#/components/responses/InternalServerError"
-      x-codeSamples:
-        - lang: typescript
-          label: get-trips
-          source: |-
-            import { TrainTravelSDK } from "train-travel-sdk";
-
-            const trainTravelSDK = new TrainTravelSDK({
-              oAuth2: process.env["TRAINTRAVELSDK_O_AUTH2"] ?? "",
-            });
-
-            async function run() {
-              const result = await trainTravelSDK.trips.list({
-                origin: "efdbb9d1-02c2-4bc3-afb7-6788d8782b1e",
-                destination: "b2e783e1-c824-4d63-b37a-d8d698862f1d",
-                date: new Date("2024-02-01T09:00:00Z"),
-              });
-
-              console.log(result);
-            }
-
-            run();
+                          - $ref: '#/components/schemas/Links-Self'
+                          - $ref: '#/components/schemas/Links-Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /bookings:
     get:
       operationId: get-bookings
       summary: List existing bookings
-      description: Returns a list of all trip bookings by the authenticated user.
+      description: Returns a list of all trips booking by the authenticated user.
       tags:
         - Bookings
-      parameters:
-        - $ref: "#/components/parameters/page"
-        - $ref: "#/components/parameters/limit"
       responses:
-        "200":
+        '200':
           description: A list of bookings
           headers:
-            Cache-Control:
-              $ref: "#/components/headers/Cache-Control"
             RateLimit:
-              $ref: "#/components/headers/RateLimit"
+              $ref: '#/components/headers/RateLimit'
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: "#/components/schemas/Wrapper-Collection"
+                  - $ref: '#/components/schemas/Wrapper-Collection'
                   - properties:
                       data:
                         type: array
                         items:
-                          $ref: "#/components/schemas/Booking"
+                          $ref: '#/components/schemas/Booking'
                   - properties:
                       links:
                         allOf:
-                          - $ref: "#/components/schemas/Links-Self"
-                          - $ref: "#/components/schemas/Links-Pagination"
+                          - $ref: '#/components/schemas/Links-Self'
+                          - $ref: '#/components/schemas/Links-Pagination'
               example:
                 data:
                   - id: efdbb9d1-02c2-4bc3-afb7-6788d8782b1e
@@ -389,12 +260,12 @@ paths:
                     has_bicycle: false
                     has_dog: false
                 links:
-                  self: "https://api.example.com/bookings"
-                  next: "https://api.example.com/bookings?page=2"
+                  self: https://api.example.com/bookings
+                  next: https://api.example.com/bookings?page=2
             application/xml:
               schema:
                 allOf:
-                  - $ref: "#/components/schemas/Wrapper-Collection"
+                  - $ref: '#/components/schemas/Wrapper-Collection'
                   - properties:
                       data:
                         type: array
@@ -402,39 +273,22 @@ paths:
                           name: bookings
                           wrapped: true
                         items:
-                          $ref: "#/components/schemas/Booking"
+                          $ref: '#/components/schemas/Booking'
                   - properties:
                       links:
                         allOf:
-                          - $ref: "#/components/schemas/Links-Self"
-                          - $ref: "#/components/schemas/Links-Pagination"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
-        "500":
-          $ref: "#/components/responses/InternalServerError"
-      x-codeSamples:
-        - lang: typescript
-          label: get-bookings
-          source: |-
-            import { TrainTravelSDK } from "train-travel-sdk";
-
-            const trainTravelSDK = new TrainTravelSDK({
-              oAuth2: process.env["TRAINTRAVELSDK_O_AUTH2"] ?? "",
-            });
-
-            async function run() {
-              const result = await trainTravelSDK.bookings.list({});
-
-              console.log(result);
-            }
-
-            run();
+                          - $ref: '#/components/schemas/Links-Self'
+                          - $ref: '#/components/schemas/Links-Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
     post:
       operationId: create-booking
       summary: Create a booking
@@ -445,26 +299,25 @@ paths:
         - OAuth2:
             - write
       requestBody:
-        description: Booking details
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Booking"
+              $ref: '#/components/schemas/Booking'
           application/xml:
             schema:
-              $ref: "#/components/schemas/Booking"
+              $ref: '#/components/schemas/Booking'
       responses:
-        "201":
+        '201':
           description: Booking successful
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: "#/components/schemas/Booking"
+                  - $ref: '#/components/schemas/Booking'
                   - properties:
                       links:
-                        $ref: "#/components/schemas/Links-Self"
+                        $ref: '#/components/schemas/Links-Self'
               example:
                 id: efdbb9d1-02c2-4bc3-afb7-6788d8782b1e
                 trip_id: efdbb9d1-02c2-4bc3-afb7-6788d8782b1e
@@ -472,63 +325,27 @@ paths:
                 has_bicycle: true
                 has_dog: true
                 links:
-                  self: "https://api.example.com/bookings/efdbb9d1-02c2-4bc3-afb7-6788d8782b1e"
+                  self: https://api.example.com/bookings/efdbb9d1-02c2-4bc3-afb7-6788d8782b1e
             application/xml:
               schema:
                 allOf:
-                  - $ref: "#/components/schemas/Booking"
+                  - $ref: '#/components/schemas/Booking'
                   - properties:
                       links:
-                        $ref: "#/components/schemas/Links-Self"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
-        "500":
-          $ref: "#/components/responses/InternalServerError"
-      x-codeSamples:
-        - lang: typescript
-          label: create-booking_json
-          source: |-
-            import { TrainTravelSDK } from "train-travel-sdk";
-
-            const trainTravelSDK = new TrainTravelSDK({
-              oAuth2: process.env["TRAINTRAVELSDK_O_AUTH2"] ?? "",
-            });
-
-            async function run() {
-              const result = await trainTravelSDK.bookings.createJson({
-                tripId: "4f4e4e1-c824-4d63-b37a-d8d698862f1d",
-                passengerName: "John Doe",
-              });
-
-              console.log(result);
-            }
-
-            run();
-        - lang: typescript
-          label: create-booking_raw
-          source: |-
-            import { TrainTravelSDK } from "train-travel-sdk";
-
-            const trainTravelSDK = new TrainTravelSDK({
-              oAuth2: process.env["TRAINTRAVELSDK_O_AUTH2"] ?? "",
-            });
-
-            async function run() {
-              const result = await trainTravelSDK.bookings.createRaw(bytesToStream(new TextEncoder().encode("{\"trip_id\":\"4f4e4e1-c824-4d63-b37a-d8d698862f1d\",\"passenger_name\":\"John Doe\"}")));
-
-              console.log(result);
-            }
-
-            run();
-  "/bookings/{bookingId}":
+                        $ref: '#/components/schemas/Links-Self'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /bookings/{bookingId}:
     parameters:
       - name: bookingId
         in: path
@@ -545,21 +362,19 @@ paths:
       tags:
         - Bookings
       responses:
-        "200":
+        '200':
           description: The booking details
           headers:
-            Cache-Control:
-              $ref: "#/components/headers/Cache-Control"
             RateLimit:
-              $ref: "#/components/headers/RateLimit"
+              $ref: '#/components/headers/RateLimit'
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: "#/components/schemas/Booking"
+                  - $ref: '#/components/schemas/Booking'
                   - properties:
                       links:
-                        $ref: "#/components/schemas/Links-Self"
+                        $ref: '#/components/schemas/Links-Self'
               example:
                 id: efdbb9d1-02c2-4bc3-afb7-6788d8782b1e
                 trip_id: efdbb9d1-02c2-4bc3-afb7-6788d8782b1e
@@ -567,48 +382,29 @@ paths:
                 has_bicycle: true
                 has_dog: true
                 links:
-                  self: "https://api.example.com/bookings/1725ff48-ab45-4bb5-9d02-88745177dedb"
+                  self: https://api.example.com/bookings/1725ff48-ab45-4bb5-9d02-88745177dedb
             application/xml:
               schema:
                 allOf:
-                  - $ref: "#/components/schemas/Booking"
+                  - $ref: '#/components/schemas/Booking'
                   - properties:
                       links:
-                        $ref: "#/components/schemas/Links-Self"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
-        "500":
-          $ref: "#/components/responses/InternalServerError"
-      x-codeSamples:
-        - lang: typescript
-          label: get-booking
-          source: |-
-            import { TrainTravelSDK } from "train-travel-sdk";
-
-            const trainTravelSDK = new TrainTravelSDK({
-              oAuth2: process.env["TRAINTRAVELSDK_O_AUTH2"] ?? "",
-            });
-
-            async function run() {
-              const result = await trainTravelSDK.bookings.get({
-                bookingId: "1725ff48-ab45-4bb5-9d02-88745177dedb",
-              });
-
-              console.log(result);
-            }
-
-            run();
+                        $ref: '#/components/schemas/Links-Self'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
     delete:
       summary: Delete a booking
-      description: "Deletes a booking, cancelling the hold on the trip."
+      description: Deletes a booking, cancelling the hold on the trip.
       operationId: delete-booking
       security:
         - OAuth2:
@@ -616,40 +412,21 @@ paths:
       tags:
         - Bookings
       responses:
-        "204":
+        '204':
           description: Booking deleted
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
-        "500":
-          $ref: "#/components/responses/InternalServerError"
-      x-codeSamples:
-        - lang: typescript
-          label: delete-booking
-          source: |-
-            import { TrainTravelSDK } from "train-travel-sdk";
-
-            const trainTravelSDK = new TrainTravelSDK({
-              oAuth2: process.env["TRAINTRAVELSDK_O_AUTH2"] ?? "",
-            });
-
-            async function run() {
-              const result = await trainTravelSDK.bookings.delete({
-                bookingId: "1725ff48-ab45-4bb5-9d02-88745177dedb",
-              });
-
-              console.log(result);
-            }
-
-            run();
-  "/bookings/{bookingId}/payment":
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /bookings/{bookingId}/payment:
     parameters:
       - name: bookingId
         in: path
@@ -661,17 +438,15 @@ paths:
         example: 1725ff48-ab45-4bb5-9d02-88745177dedb
     post:
       summary: Pay for a Booking
-      description: "A payment is an attempt to pay for the booking, which will confirm the booking for the user and enable them to get their tickets."
+      description: A payment is an attempt to pay for the booking, which will confirm the booking for the user and enable them to get their tickets.
       operationId: create-booking-payment
       tags:
         - Payments
       requestBody:
-        description: Payment details
-        required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BookingPayment"
+              $ref: '#/components/schemas/BookingPayment'
             examples:
               Card:
                 summary: Card Payment
@@ -681,8 +456,8 @@ paths:
                   source:
                     object: card
                     name: J. Doe
-                    number: "4242424242424242"
-                    cvc: "123"
+                    number: '4242424242424242'
+                    cvc: 123
                     exp_month: 12
                     exp_year: 2025
                     address_line1: 123 Fake Street
@@ -698,27 +473,25 @@ paths:
                   source:
                     object: bank_account
                     name: J. Doe
-                    number: "00012345"
-                    sort_code: "000123"
+                    number: '00012345'
+                    sort_code: '000123'
                     account_type: individual
                     bank_name: Starling Bank
                     country: gb
       responses:
-        "200":
+        '200':
           description: Payment successful
           headers:
-            Cache-Control:
-              $ref: "#/components/headers/Cache-Control"
             RateLimit:
-              $ref: "#/components/headers/RateLimit"
+              $ref: '#/components/headers/RateLimit'
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: "#/components/schemas/BookingPayment"
+                  - $ref: '#/components/schemas/BookingPayment'
                   - properties:
                       links:
-                        $ref: "#/components/schemas/Links-Booking"
+                        $ref: '#/components/schemas/Links-Booking'
               examples:
                 Card:
                   summary: Card Payment
@@ -729,15 +502,15 @@ paths:
                     source:
                       object: card
                       name: J. Doe
-                      number: "************4242"
-                      cvc: "123"
+                      number: '************4242'
+                      cvc: 123
                       exp_month: 12
                       exp_year: 2025
                       address_country: gb
                       address_post_code: N12 9XX
                     status: succeeded
                     links:
-                      booking: "https://api.example.com/bookings/1725ff48-ab45-4bb5-9d02-88745177dedb/payment"
+                      booking: https://api.example.com/bookings/1725ff48-ab45-4bb5-9d02-88745177dedb/payment
                 Bank:
                   summary: Bank Account Payment
                   value:
@@ -748,59 +521,23 @@ paths:
                       object: bank_account
                       name: J. Doe
                       account_type: individual
-                      number: "*********2345"
-                      sort_code: "000123"
+                      number: '*********2345'
+                      sort_code: '000123'
                       bank_name: Starling Bank
                       country: gb
                     status: succeeded
                     links:
-                      booking: "https://api.example.com/bookings/1725ff48-ab45-4bb5-9d02-88745177dedb"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
-        "500":
-          $ref: "#/components/responses/InternalServerError"
-      x-codeSamples:
-        - lang: typescript
-          label: create-booking-payment
-          source: |-
-            import { TrainTravelSDK } from "train-travel-sdk";
-
-            const trainTravelSDK = new TrainTravelSDK({
-              oAuth2: process.env["TRAINTRAVELSDK_O_AUTH2"] ?? "",
-            });
-
-            async function run() {
-              const result = await trainTravelSDK.bookings.payments.create({
-                bookingId: "1725ff48-ab45-4bb5-9d02-88745177dedb",
-                bookingPayment: {
-                  amount: 49.99,
-                  currency: "gbp",
-                  source: {
-                    object: "card",
-                    name: "J. Doe",
-                    number: "4242424242424242",
-                    cvc: "123",
-                    expMonth: 12,
-                    expYear: 2025,
-                    addressLine1: "123 Fake Street",
-                    addressLine2: "4th Floor",
-                    addressCity: "London",
-                    addressCountry: "gb",
-                    addressPostCode: "N12 9XX",
-                  },
-                },
-              });
-
-              console.log(result);
-            }
-
-            run();
+                      booking: https://api.example.com/bookings/1725ff48-ab45-4bb5-9d02-88745177dedb
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 webhooks:
   newBooking:
     post:
@@ -811,17 +548,16 @@ webhooks:
       tags:
         - Bookings
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               allOf:
-                - $ref: "#/components/schemas/Booking"
+                - $ref: '#/components/schemas/Booking'
                 - properties:
                     links:
                       allOf:
-                        - $ref: "#/components/schemas/Links-Self"
-                        - $ref: "#/components/schemas/Links-Pagination"
+                        - $ref: '#/components/schemas/Links-Self'
+                        - $ref: '#/components/schemas/Links-Pagination'
             example:
               id: efdbb9d1-02c2-4bc3-afb7-6788d8782b1e
               trip_id: efdbb9d1-02c2-4bc3-afb7-6788d8782b1e
@@ -829,47 +565,27 @@ webhooks:
               has_bicycle: true
               has_dog: true
               links:
-                self: "https://api.example.com/bookings/1725ff48-ab45-4bb5-9d02-88745177dedb"
+                self: https://api.example.com/bookings/1725ff48-ab45-4bb5-9d02-88745177dedb
       responses:
-        "200":
+        '200':
           description: Return a 200 status to indicate that the data was received successfully.
+          headers:
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
 components:
-  parameters:
-    page:
-      name: page
-      in: query
-      description: The page number to return
-      required: false
-      schema:
-        type: integer
-        minimum: 1
-        default: 1
-      example: 1
-    limit:
-      name: limit
-      in: query
-      description: The number of items to return per page
-      required: false
-      schema:
-        type: integer
-        minimum: 1
-        maximum: 100
-        default: 10
-      example: 10
   securitySchemes:
     OAuth2:
       type: oauth2
       description: OAuth 2.0 authorization code following RFC8725 best practices.
       flows:
         authorizationCode:
-          authorizationUrl: "https://example.com/oauth/authorize"
-          tokenUrl: "https://example.com/oauth/token"
+          authorizationUrl: https://example.com/oauth/authorize
+          tokenUrl: https://example.com/oauth/token
           scopes:
             read: Read access
             write: Write access
   schemas:
     Station:
-      description: A train station.
       type: object
       xml:
         name: station
@@ -896,8 +612,8 @@ components:
           type: string
           description: The address of the station.
           examples:
-            - "Invalidenstraße 10557 Berlin, Germany"
-            - "18 Rue de Dunkerque 75010 Paris, France"
+            - Invalidenstraße 10557 Berlin, Germany
+            - 18 Rue de Dunkerque 75010 Paris, France
         country_code:
           type: string
           description: The country code of the station.
@@ -907,33 +623,17 @@ components:
             - FR
         timezone:
           type: string
-          description: "The timezone of the station in the [IANA Time Zone Database format](https://www.iana.org/time-zones)."
+          description: The timezone of the station in the [IANA Time Zone Database format](https://www.iana.org/time-zones).
           examples:
             - Europe/Berlin
             - Europe/Paris
     Links-Self:
-      description: The link to the current resource.
-      type: object
-      properties:
-        self:
-          type: string
-          format: uri
-    Links-Destination:
-      description: The link to the destination station resource.
-      type: object
-      properties:
-        self:
-          type: string
-          format: uri
-    Links-Origin:
-      description: The link to the origin station resource.
       type: object
       properties:
         self:
           type: string
           format: uri
     Links-Pagination:
-      description: Links to the next and previous pages of a paginated response.
       type: object
       properties:
         next:
@@ -943,39 +643,31 @@ components:
           type: string
           format: uri
     Problem:
-      description: A problem detail object as defined in RFC 7807.
-      type: object
       xml:
         name: problem
-        namespace: "urn:ietf:rfc:7807"
+        namespace: urn:ietf:rfc:7807
       properties:
         type:
           type: string
           description: A URI reference that identifies the problem type
-          examples:
-            - "https://example.com/probs/out-of-credit"
+          example: https://example.com/probs/out-of-credit
         title:
           type: string
-          description: "A short, human-readable summary of the problem type"
-          examples:
-            - You do not have enough credit.
+          description: A short, human-readable summary of the problem type
+          example: You do not have enough credit.
         detail:
           type: string
           description: A human-readable explanation specific to this occurrence of the problem
-          examples:
-            - "Your current balance is 30, but that costs 50."
+          example: Your current balance is 30, but that costs 50.
         instance:
           type: string
           description: A URI reference that identifies the specific occurrence of the problem
-          examples:
-            - /account/12345/msgs/abc
+          example: /account/12345/msgs/abc
         status:
           type: integer
           description: The HTTP status code
-          examples:
-            - 400
+          example: 400
     Trip:
-      description: A train trip.
       type: object
       xml:
         name: trip
@@ -990,26 +682,26 @@ components:
           type: string
           description: The starting station of the trip
           examples:
-            - efdbb9d1-02c2-4bc3-afb7-6788d8782b1e
-            - b2e783e1-c824-4d63-b37a-d8d698862f1d
+            - Berlin Hauptbahnhof
+            - Paris Gare du Nord
         destination:
           type: string
           description: The destination station of the trip
           examples:
-            - b2e783e1-c824-4d63-b37a-d8d698862f1d
-            - efdbb9d1-02c2-4bc3-afb7-6788d8782b1e
+            - Paris Gare du Nord
+            - Berlin Hauptbahnhof
         departure_time:
           type: string
           format: date-time
           description: The date and time when the trip departs
           examples:
-            - "2024-02-01T10:00:00Z"
+            - '2024-02-01T10:00:00Z'
         arrival_time:
           type: string
           format: date-time
           description: The date and time when the trip arrives
           examples:
-            - "2024-02-01T16:00:00Z"
+            - '2024-02-01T16:00:00Z'
         operator:
           type: string
           description: The name of the operator of the trip
@@ -1028,7 +720,6 @@ components:
           type: boolean
           description: Indicates whether dogs are allowed on the trip
     Booking:
-      description: A booking for a train trip.
       type: object
       xml:
         name: booking
@@ -1073,11 +764,10 @@ components:
       xml:
         name: data
     BookingPayment:
-      description: A payment for a booking.
       type: object
       properties:
         id:
-          description: "Unique identifier for the payment. This will be a unique identifier for the payment, and is used to reference the payment in other objects."
+          description: Unique identifier for the payment. This will be a unique identifier for the payment, and is used to reference the payment in other objects.
           type: string
           format: uuid
           readOnly: true
@@ -1088,7 +778,7 @@ components:
           examples:
             - 49.99
         currency:
-          description: "Three-letter [ISO currency code](https://www.iso.org/iso-4217-currency-codes.html), in lowercase."
+          description: Three-letter [ISO currency code](https://www.iso.org/iso-4217-currency-codes.html), in lowercase.
           type: string
           enum:
             - bam
@@ -1102,10 +792,9 @@ components:
         source:
           unevaluatedProperties: false
           description: The payment source to take the payment from. This can be a card or a bank account. Some of these properties will be hidden on read to protect PII leaking.
-          oneOf:
+          anyOf:
             - title: Card
               description: A card (debit or credit) to take payment from.
-              type: object
               properties:
                 object:
                   type: string
@@ -1117,16 +806,16 @@ components:
                     - Francis Bourgeois
                 number:
                   type: string
-                  description: "The card number, as a string without any separators. On read all but the last four digits will be masked for security."
+                  description: The card number, as a string without any separators. On read all but the last four digits will be masked for security.
                   examples:
-                    - "4242424242424242"
+                    - '4242424242424242'
                 cvc:
-                  type: string
-                  description: "Card security code, 3 or 4 digits usually found on the back of the card."
+                  type: integer
+                  description: Card security code, 3 or 4 digits usually found on the back of the card.
                   minLength: 3
                   maxLength: 4
                   writeOnly: true
-                  example: "123"
+                  example: 123
                 exp_month:
                   type: integer
                   format: int64
@@ -1169,10 +858,10 @@ components:
                   type: string
                 number:
                   type: string
-                  description: "The account number for the bank account, in string form. Must be a current account."
+                  description: The account number for the bank account, in string form. Must be a current account.
                 sort_code:
                   type: string
-                  description: "The sort code for the bank account, in string form. Must be a six-digit number."
+                  description: The sort code for the bank account, in string form. Must be a six-digit number.
                 account_type:
                   enum:
                     - individual
@@ -1194,7 +883,7 @@ components:
                 - bank_name
                 - country
         status:
-          description: "The status of the payment, one of `pending`, `succeeded`, or `failed`."
+          description: The status of the payment, one of `pending`, `succeeded`, or `failed`.
           type: string
           enum:
             - pending
@@ -1202,72 +891,58 @@ components:
             - failed
           readOnly: true
     Links-Booking:
-      description: The link to the booking resource.
       type: object
       properties:
         booking:
           type: string
           format: uri
           examples:
-            - "https://api.example.com/bookings/1725ff48-ab45-4bb5-9d02-88745177dedb"
+            - https://api.example.com/bookings/1725ff48-ab45-4bb5-9d02-88745177dedb
   headers:
-    Cache-Control:
-      description: |
-        The Cache-Control header communicates directives for caching mechanisms in both requests and responses. 
-        It is used to specify the caching directives in responses to prevent caches from storing sensitive information.
-      schema:
-        type: string
-        description: "A comma-separated list of directives as defined in [RFC 9111](https://www.rfc-editor.org/rfc/rfc9111.html)."
-        examples:
-          - max-age=3600
-          - "max-age=604800, public"
-          - no-store
-          - no-cache
-          - private
     RateLimit:
       description: |
-        The RateLimit header communicates quota policies. It contains a `limit` to
-        convey the expiring limit, `remaining` to convey the remaining quota units,
+        The RateLimit header is communicate quota policies, and contains a `limit` to
+        conveys the expiring limit, `remaining` to convey the remaining quota units,
         and `reset` to convey the time window reset time.
       schema:
         type: string
         examples:
-          - "limit=10, remaining=0, reset=10"
+          - limit=10, remaining=0, reset=10
     Retry-After:
       description: |
-        The Retry-After header indicates how long the user agent should wait before making a follow-up request. 
-        The value is in seconds and can be an integer or a date in the future. 
-        If the value is an integer, it indicates the number of seconds to wait. 
+        The Retry-After header indicates how long the user agent should wait before making a follow-up request.
+        The value is in seconds and can be an integer or a date in the future.
+        If the value is an integer, it indicates the number of seconds to wait.
         If the value is a date, it indicates the time at which the user agent should make a follow-up request.
       schema:
         type: string
       examples:
         integer:
-          value: "120"
+          value: '120'
           summary: Retry after 120 seconds
         date:
-          value: "Fri, 31 Dec 2021 23:59:59 GMT"
+          value: 'Fri, 31 Dec 2021 23:59:59 GMT'
           summary: Retry after the specified date
   responses:
     BadRequest:
       description: Bad Request
       headers:
         RateLimit:
-          $ref: "#/components/headers/RateLimit"
+          $ref: '#/components/headers/RateLimit'
       content:
         application/problem+json:
           schema:
-            $ref: "#/components/schemas/Problem"
+            $ref: '#/components/schemas/Problem'
           example:
-            type: "https://example.com/errors/bad-request"
+            type: https://example.com/errors/bad-request
             title: Bad Request
             status: 400
             detail: The request is invalid or missing required parameters.
         application/problem+xml:
           schema:
-            $ref: "#/components/schemas/Problem"
+            $ref: '#/components/schemas/Problem'
           example:
-            type: "https://example.com/errors/bad-request"
+            type: https://example.com/errors/bad-request
             title: Bad Request
             status: 400
             detail: The request is invalid or missing required parameters.
@@ -1275,21 +950,21 @@ components:
       description: Conflict
       headers:
         RateLimit:
-          $ref: "#/components/headers/RateLimit"
+          $ref: '#/components/headers/RateLimit'
       content:
         application/problem+json:
           schema:
-            $ref: "#/components/schemas/Problem"
+            $ref: '#/components/schemas/Problem'
           example:
-            type: "https://example.com/errors/conflict"
+            type: https://example.com/errors/conflict
             title: Conflict
             status: 409
             detail: There is a conflict with an existing resource.
         application/problem+xml:
           schema:
-            $ref: "#/components/schemas/Problem"
+            $ref: '#/components/schemas/Problem'
           example:
-            type: "https://example.com/errors/conflict"
+            type: https://example.com/errors/conflict
             title: Conflict
             status: 409
             detail: There is a conflict with an existing resource.
@@ -1297,43 +972,43 @@ components:
       description: Forbidden
       headers:
         RateLimit:
-          $ref: "#/components/headers/RateLimit"
+          $ref: '#/components/headers/RateLimit'
       content:
         application/problem+json:
           schema:
-            $ref: "#/components/schemas/Problem"
+            $ref: '#/components/schemas/Problem'
           example:
-            type: "https://example.com/errors/forbidden"
+            type: https://example.com/errors/forbidden
             title: Forbidden
             status: 403
-            detail: Access is forbidden with the provided credentials.
+            detail: Access is forbidden for the provided credentials.
         application/problem+xml:
           schema:
-            $ref: "#/components/schemas/Problem"
+            $ref: '#/components/schemas/Problem'
           example:
-            type: "https://example.com/errors/forbidden"
+            type: https://example.com/errors/forbidden
             title: Forbidden
             status: 403
-            detail: Access is forbidden with the provided credentials.
+            detail: Access is forbidden for the provided credentials.
     InternalServerError:
       description: Internal Server Error
       headers:
         RateLimit:
-          $ref: "#/components/headers/RateLimit"
+          $ref: '#/components/headers/RateLimit'
       content:
         application/problem+json:
           schema:
-            $ref: "#/components/schemas/Problem"
+            $ref: '#/components/schemas/Problem'
           example:
-            type: "https://example.com/errors/internal-server-error"
+            type: https://example.com/errors/internal-server-error
             title: Internal Server Error
             status: 500
             detail: An unexpected error occurred.
         application/problem+xml:
           schema:
-            $ref: "#/components/schemas/Problem"
+            $ref: '#/components/schemas/Problem'
           example:
-            type: "https://example.com/errors/internal-server-error"
+            type: https://example.com/errors/internal-server-error
             title: Internal Server Error
             status: 500
             detail: An unexpected error occurred.
@@ -1341,21 +1016,21 @@ components:
       description: Not Found
       headers:
         RateLimit:
-          $ref: "#/components/headers/RateLimit"
+          $ref: '#/components/headers/RateLimit'
       content:
         application/problem+json:
           schema:
-            $ref: "#/components/schemas/Problem"
+            $ref: '#/components/schemas/Problem'
           example:
-            type: "https://example.com/errors/not-found"
+            type: https://example.com/errors/not-found
             title: Not Found
             status: 404
             detail: The requested resource was not found.
         application/problem+xml:
           schema:
-            $ref: "#/components/schemas/Problem"
+            $ref: '#/components/schemas/Problem'
           example:
-            type: "https://example.com/errors/not-found"
+            type: https://example.com/errors/not-found
             title: Not Found
             status: 404
             detail: The requested resource was not found.
@@ -1363,23 +1038,23 @@ components:
       description: Too Many Requests
       headers:
         RateLimit:
-          $ref: "#/components/headers/RateLimit"
+          $ref: '#/components/headers/RateLimit'
         Retry-After:
-          $ref: "#/components/headers/Retry-After"
+          $ref: '#/components/headers/Retry-After'
       content:
         application/problem+json:
           schema:
-            $ref: "#/components/schemas/Problem"
+            $ref: '#/components/schemas/Problem'
           example:
-            type: "https://example.com/errors/too-many-requests"
+            type: https://example.com/errors/too-many-requests
             title: Too Many Requests
             status: 429
             detail: You have exceeded the rate limit.
         application/problem+xml:
           schema:
-            $ref: "#/components/schemas/Problem"
+            $ref: '#/components/schemas/Problem'
           example:
-            type: "https://example.com/errors/too-many-requests"
+            type: https://example.com/errors/too-many-requests
             title: Too Many Requests
             status: 429
             detail: You have exceeded the rate limit.
@@ -1387,21 +1062,21 @@ components:
       description: Unauthorized
       headers:
         RateLimit:
-          $ref: "#/components/headers/RateLimit"
+          $ref: '#/components/headers/RateLimit'
       content:
         application/problem+json:
           schema:
-            $ref: "#/components/schemas/Problem"
+            $ref: '#/components/schemas/Problem'
           example:
-            type: "https://example.com/errors/unauthorized"
+            type: https://example.com/errors/unauthorized
             title: Unauthorized
             status: 401
             detail: You do not have the necessary permissions.
         application/problem+xml:
           schema:
-            $ref: "#/components/schemas/Problem"
+            $ref: '#/components/schemas/Problem'
           example:
-            type: "https://example.com/errors/unauthorized"
+            type: https://example.com/errors/unauthorized
             title: Unauthorized
             status: 401
             detail: You do not have the necessary permissions.
