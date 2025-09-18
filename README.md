@@ -60,3 +60,4 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 When contributing:
 1. Ensure tests pass: `go test -v`
 2. Test with both OpenAPI 3.0 and 3.1 examples
+3. If the UI changes, make sure to run `vhs preview.tape` to generate a new preview GIF
