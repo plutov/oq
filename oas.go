@@ -6,7 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/pb33f/libopenapi/datamodel/high/base"
+	v3 "github.com/pb33f/libopenapi/datamodel/high/v3"
 )
 
 // sortResponseCodes sorts HTTP response codes with stable ordering:
@@ -35,10 +36,18 @@ func sortResponseCodes(codes []string) {
 	})
 }
 
-func extractEndpoints(doc *openapi3.T) []endpoint {
+func extractEndpoints(doc *v3.Document) []endpoint {
 	var endpoints []endpoint
 
-	for path, pathItem := range doc.Paths.Map() {
+	if doc.Paths == nil || doc.Paths.PathItems == nil {
+		return endpoints
+	}
+
+	// Iterate through path items using the orderedmap methods
+	for pair := doc.Paths.PathItems.First(); pair != nil; pair = pair.Next() {
+		path := pair.Key()
+		pathItem := pair.Value()
+
 		if pathItem.Get != nil {
 			endpoints = append(endpoints, endpoint{path: path, method: "GET", op: pathItem.Get, folded: true})
 		}
@@ -76,50 +85,37 @@ func extractEndpoints(doc *openapi3.T) []endpoint {
 	return endpoints
 }
 
-func extractWebhooks(doc *openapi3.T) []webhook {
+func extractWebhooks(doc *v3.Document) []webhook {
 	var webhooks []webhook
 
-	// Check if this is OpenAPI 3.1+ first
-	if !isOpenAPI31OrLater(doc) {
-		return webhooks
-	}
-
-	// Check in Extensions first
-	if webhookData, ok := doc.Extensions["webhooks"].(map[string]interface{}); ok {
-		webhooks = parseWebhooksFromData(webhookData)
-	}
-
-	return webhooks
-}
-
-func parseWebhooksFromData(webhookData map[string]interface{}) []webhook {
-	var webhooks []webhook
-
-	for name, hookData := range webhookData {
-		if hookMap, ok := hookData.(map[string]interface{}); ok {
-			// Look for HTTP methods in the webhook
-			for method, methodData := range hookMap {
-				if isHTTPMethod(method) {
-					if methodMap, ok := methodData.(map[string]interface{}); ok {
-						// Create a mock operation from the webhook data
-						op := &openapi3.Operation{}
-						if summary, ok := methodMap["summary"].(string); ok {
-							op.Summary = summary
-						}
-						if description, ok := methodMap["description"].(string); ok {
-							op.Description = description
-						}
-						if operationId, ok := methodMap["operationId"].(string); ok {
-							op.OperationID = operationId
-						}
-
-						webhooks = append(webhooks, webhook{
-							name:   name,
-							method: strings.ToUpper(method),
-							op:     op,
-							folded: true,
-						})
-					}
+	if doc.Webhooks != nil {
+		for pair := doc.Webhooks.First(); pair != nil; pair = pair.Next() {
+			name := pair.Key()
+			hook := pair.Value()
+			if hook != nil {
+				if hook.Get != nil {
+					webhooks = append(webhooks, webhook{name: name, method: "GET", op: hook.Get, folded: true})
+				}
+				if hook.Post != nil {
+					webhooks = append(webhooks, webhook{name: name, method: "POST", op: hook.Post, folded: true})
+				}
+				if hook.Put != nil {
+					webhooks = append(webhooks, webhook{name: name, method: "PUT", op: hook.Put, folded: true})
+				}
+				if hook.Delete != nil {
+					webhooks = append(webhooks, webhook{name: name, method: "DELETE", op: hook.Delete, folded: true})
+				}
+				if hook.Patch != nil {
+					webhooks = append(webhooks, webhook{name: name, method: "PATCH", op: hook.Patch, folded: true})
+				}
+				if hook.Head != nil {
+					webhooks = append(webhooks, webhook{name: name, method: "HEAD", op: hook.Head, folded: true})
+				}
+				if hook.Options != nil {
+					webhooks = append(webhooks, webhook{name: name, method: "OPTIONS", op: hook.Options, folded: true})
+				}
+				if hook.Trace != nil {
+					webhooks = append(webhooks, webhook{name: name, method: "TRACE", op: hook.Trace, folded: true})
 				}
 			}
 		}
@@ -136,48 +132,18 @@ func parseWebhooksFromData(webhookData map[string]interface{}) []webhook {
 	return webhooks
 }
 
-func isOpenAPI31OrLater(doc *openapi3.T) bool {
-	if doc == nil || doc.OpenAPI == "" {
-		return false
-	}
-
-	// Extract major and minor version
-	parts := strings.Split(doc.OpenAPI, ".")
-	if len(parts) < 2 {
-		return false
-	}
-
-	major := parts[0]
-	minor := parts[1]
-
-	// Check for version 3.1 or later
-	return major == "3" && (minor == "1" || minor > "1") || major > "3"
-}
-
-func isHTTPMethod(method string) bool {
-	httpMethods := map[string]bool{
-		"get":     true,
-		"post":    true,
-		"put":     true,
-		"delete":  true,
-		"patch":   true,
-		"head":    true,
-		"options": true,
-		"trace":   true,
-	}
-	return httpMethods[strings.ToLower(method)]
-}
-
-func extractComponents(doc *openapi3.T) []component {
+func extractComponents(doc *v3.Document) []component {
 	var components []component
 
 	if doc.Components != nil {
 		if doc.Components.Schemas != nil {
-			for name, schema := range doc.Components.Schemas {
-				details := formatSchemaDetails(schema.Value)
+			for pair := doc.Components.Schemas.First(); pair != nil; pair = pair.Next() {
+				name := pair.Key()
+				schema := pair.Value()
+				details := formatSchemaDetails(schema)
 				description := ""
-				if schema.Value != nil && schema.Value.Description != "" {
-					description = schema.Value.Description
+				if schema != nil && schema.Schema() != nil && schema.Schema().Description != "" {
+					description = schema.Schema().Description
 				}
 				components = append(components, component{
 					name:        name,
@@ -189,11 +155,13 @@ func extractComponents(doc *openapi3.T) []component {
 			}
 		}
 		if doc.Components.RequestBodies != nil {
-			for name, reqBody := range doc.Components.RequestBodies {
-				details := formatRequestBodyDetails(reqBody.Value)
+			for pair := doc.Components.RequestBodies.First(); pair != nil; pair = pair.Next() {
+				name := pair.Key()
+				reqBody := pair.Value()
+				details := formatRequestBodyDetails(reqBody)
 				description := ""
-				if reqBody.Value != nil && reqBody.Value.Description != "" {
-					description = reqBody.Value.Description
+				if reqBody != nil && reqBody.Description != "" {
+					description = reqBody.Description
 				}
 				components = append(components, component{
 					name:        name,
@@ -205,11 +173,13 @@ func extractComponents(doc *openapi3.T) []component {
 			}
 		}
 		if doc.Components.Responses != nil {
-			for name, resp := range doc.Components.Responses {
-				details := formatResponseDetails(resp.Value)
+			for pair := doc.Components.Responses.First(); pair != nil; pair = pair.Next() {
+				name := pair.Key()
+				resp := pair.Value()
+				details := formatResponseDetails(resp)
 				description := ""
-				if resp.Value != nil && resp.Value.Description != nil {
-					description = *resp.Value.Description
+				if resp != nil && resp.Description != "" {
+					description = resp.Description
 				}
 				components = append(components, component{
 					name:        name,
@@ -221,11 +191,13 @@ func extractComponents(doc *openapi3.T) []component {
 			}
 		}
 		if doc.Components.Parameters != nil {
-			for name, param := range doc.Components.Parameters {
-				details := formatParameterDetails(param.Value)
+			for pair := doc.Components.Parameters.First(); pair != nil; pair = pair.Next() {
+				name := pair.Key()
+				param := pair.Value()
+				details := formatParameterDetails(param)
 				description := ""
-				if param.Value != nil && param.Value.Description != "" {
-					description = param.Value.Description
+				if param != nil && param.Description != "" {
+					description = param.Description
 				}
 				components = append(components, component{
 					name:        name,
@@ -237,11 +209,13 @@ func extractComponents(doc *openapi3.T) []component {
 			}
 		}
 		if doc.Components.Headers != nil {
-			for name, header := range doc.Components.Headers {
-				details := formatHeaderDetails(header.Value)
+			for pair := doc.Components.Headers.First(); pair != nil; pair = pair.Next() {
+				name := pair.Key()
+				header := pair.Value()
+				details := formatHeaderDetails(header)
 				description := ""
-				if header.Value != nil && header.Value.Description != "" {
-					description = header.Value.Description
+				if header != nil && header.Description != "" {
+					description = header.Description
 				}
 				components = append(components, component{
 					name:        name,
@@ -253,11 +227,13 @@ func extractComponents(doc *openapi3.T) []component {
 			}
 		}
 		if doc.Components.SecuritySchemes != nil {
-			for name, secScheme := range doc.Components.SecuritySchemes {
-				details := formatSecuritySchemeDetails(name, secScheme.Value)
+			for pair := doc.Components.SecuritySchemes.First(); pair != nil; pair = pair.Next() {
+				name := pair.Key()
+				secScheme := pair.Value()
+				details := formatSecuritySchemeDetails(name, secScheme)
 				description := ""
-				if secScheme.Value != nil && secScheme.Value.Description != "" {
-					description = secScheme.Value.Description
+				if secScheme != nil && secScheme.Description != "" {
+					description = secScheme.Description
 				}
 				components = append(components, component{
 					name:        name,
@@ -295,20 +271,22 @@ func formatEndpointDetails(ep endpoint) string {
 	if len(ep.op.Parameters) > 0 {
 		details.WriteString("Parameters:\n")
 		for _, param := range ep.op.Parameters {
-			if param.Value != nil {
+			if param != nil {
 				details.WriteString(fmt.Sprintf("  - %s (%s): %s\n",
-					param.Value.Name, param.Value.In, param.Value.Description))
+					param.Name, param.In, param.Description))
 			}
 		}
 	}
 
-	if ep.op.RequestBody != nil && ep.op.RequestBody.Value != nil {
+	if ep.op.RequestBody != nil {
 		details.WriteString("Request Body:\n")
 
 		// Get media types and sort them for stable ordering
 		var mediaTypes []string
-		for mediaType := range ep.op.RequestBody.Value.Content {
-			mediaTypes = append(mediaTypes, mediaType)
+		if ep.op.RequestBody.Content != nil {
+			for pair := ep.op.RequestBody.Content.First(); pair != nil; pair = pair.Next() {
+				mediaTypes = append(mediaTypes, pair.Key())
+			}
 		}
 		sort.Strings(mediaTypes)
 
@@ -322,17 +300,20 @@ func formatEndpointDetails(ep endpoint) string {
 
 		// Get response codes and sort them for stable ordering
 		var codes []string
-		for code := range ep.op.Responses.Map() {
-			codes = append(codes, code)
+		if ep.op.Responses.Codes != nil {
+			for pair := ep.op.Responses.Codes.First(); pair != nil; pair = pair.Next() {
+				codes = append(codes, pair.Key())
+			}
 		}
 
 		// Sort by status code numerically, then alphabetically for non-numeric codes
 		sortResponseCodes(codes)
 
 		for _, code := range codes {
-			resp := ep.op.Responses.Map()[code]
-			if resp.Value != nil && resp.Value.Description != nil {
-				details.WriteString(fmt.Sprintf("  - %s: %s\n", code, *resp.Value.Description))
+			if resp, ok := ep.op.Responses.Codes.Get(code); ok && resp != nil {
+				if resp.Description != "" {
+					details.WriteString(fmt.Sprintf("  - %s: %s\n", code, resp.Description))
+				}
 			}
 		}
 	}
@@ -340,146 +321,149 @@ func formatEndpointDetails(ep endpoint) string {
 	return details.String()
 }
 
-func formatSchemaDetails(schema *openapi3.Schema) string {
+func formatSchemaDetails(schema *base.SchemaProxy) string {
 	var details strings.Builder
 
-	if schema == nil {
+	if schema == nil || schema.Schema() == nil {
 		return "No schema details available"
 	}
 
+	s := schema.Schema()
+
 	// Handle both single type (OpenAPI 3.0) and array of types (OpenAPI 3.1)
-	if schema.Type != nil && len(*schema.Type) > 0 {
-		types := *schema.Type
-		if len(types) == 1 {
-			details.WriteString(fmt.Sprintf("Type: %s\n", types[0]))
+	if len(s.Type) > 0 {
+		if len(s.Type) == 1 {
+			details.WriteString(fmt.Sprintf("Type: %s\n", s.Type[0]))
 		} else {
-			details.WriteString(fmt.Sprintf("Types: %v\n", types))
+			details.WriteString(fmt.Sprintf("Types: %v\n", s.Type))
 		}
 	}
 
-	if schema.Format != "" {
-		details.WriteString(fmt.Sprintf("Format: %s\n", schema.Format))
+	if s.Format != "" {
+		details.WriteString(fmt.Sprintf("Format: %s\n", s.Format))
 	}
 
-	if len(schema.Required) > 0 {
-		details.WriteString(fmt.Sprintf("Required: %v\n", schema.Required))
+	if len(s.Required) > 0 {
+		details.WriteString(fmt.Sprintf("Required: %v\n", s.Required))
 	}
 
-	if len(schema.Properties) > 0 {
+	if s.Properties != nil && s.Properties.Len() > 0 {
 		details.WriteString("Properties:\n")
 
 		// Get property names and sort them for stable ordering
 		var propNames []string
-		for propName := range schema.Properties {
-			propNames = append(propNames, propName)
+		for pair := s.Properties.First(); pair != nil; pair = pair.Next() {
+			propNames = append(propNames, pair.Key())
 		}
 		sort.Strings(propNames)
 
 		for _, propName := range propNames {
-			prop := schema.Properties[propName]
-			propType := "unknown"
-			if prop.Value != nil && prop.Value.Type != nil && len(*prop.Value.Type) > 0 {
-				types := *prop.Value.Type
-				if len(types) == 1 {
-					propType = types[0]
-				} else {
-					propType = fmt.Sprintf("%v", types)
+			if prop, ok := s.Properties.Get(propName); ok && prop != nil && prop.Schema() != nil {
+				propType := "unknown"
+				if len(prop.Schema().Type) > 0 {
+					if len(prop.Schema().Type) == 1 {
+						propType = prop.Schema().Type[0]
+					} else {
+						propType = fmt.Sprintf("%v", prop.Schema().Type)
+					}
 				}
+				details.WriteString(fmt.Sprintf("  - %s: %s\n", propName, propType))
 			}
-			details.WriteString(fmt.Sprintf("  - %s: %s\n", propName, propType))
 		}
 	}
 
-	if schema.Items != nil && schema.Items.Value != nil && schema.Items.Value.Type != nil && len(*schema.Items.Value.Type) > 0 {
-		types := *schema.Items.Value.Type
-		if len(types) == 1 {
-			details.WriteString(fmt.Sprintf("Items Type: %s\n", types[0]))
+	if s.Items != nil && s.Items.A != nil && s.Items.A.Schema() != nil && len(s.Items.A.Schema().Type) > 0 {
+		itemsType := s.Items.A.Schema().Type
+		if len(itemsType) == 1 {
+			details.WriteString(fmt.Sprintf("Items Type: %s\n", itemsType[0]))
 		} else {
-			details.WriteString(fmt.Sprintf("Items Types: %v\n", types))
+			details.WriteString(fmt.Sprintf("Items Types: %v\n", itemsType))
 		}
 	}
 
 	return details.String()
 }
 
-func formatRequestBodyDetails(reqBody *openapi3.RequestBody) string {
+func formatRequestBodyDetails(reqBody *v3.RequestBody) string {
 	var details strings.Builder
 
 	if reqBody == nil {
 		return "No request body details available"
 	}
 
-	if reqBody.Required {
+	if reqBody.Required != nil && *reqBody.Required {
 		details.WriteString("Required: true\n")
 	}
 
-	if len(reqBody.Content) > 0 {
+	if reqBody.Content != nil && reqBody.Content.Len() > 0 {
 		details.WriteString("Content Types:\n")
 
 		// Get media types and sort them for stable ordering
 		var mediaTypes []string
-		for mediaType := range reqBody.Content {
-			mediaTypes = append(mediaTypes, mediaType)
+		for pair := reqBody.Content.First(); pair != nil; pair = pair.Next() {
+			mediaTypes = append(mediaTypes, pair.Key())
 		}
 		sort.Strings(mediaTypes)
 
 		for _, mediaType := range mediaTypes {
-			mediaTypeObj := reqBody.Content[mediaType]
-			details.WriteString(fmt.Sprintf("  - %s", mediaType))
-			if mediaTypeObj.Schema != nil && mediaTypeObj.Schema.Value != nil && mediaTypeObj.Schema.Value.Type != nil && len(*mediaTypeObj.Schema.Value.Type) > 0 {
-				types := *mediaTypeObj.Schema.Value.Type
-				if len(types) == 1 {
-					details.WriteString(fmt.Sprintf(" (type: %s)", types[0]))
-				} else {
-					details.WriteString(fmt.Sprintf(" (types: %v)", types))
+			if mediaTypeObj, ok := reqBody.Content.Get(mediaType); ok && mediaTypeObj != nil {
+				details.WriteString(fmt.Sprintf("  - %s", mediaType))
+				if mediaTypeObj.Schema != nil && mediaTypeObj.Schema.Schema() != nil && len(mediaTypeObj.Schema.Schema().Type) > 0 {
+					types := mediaTypeObj.Schema.Schema().Type
+					if len(types) == 1 {
+						details.WriteString(fmt.Sprintf(" (type: %s)", types[0]))
+					} else {
+						details.WriteString(fmt.Sprintf(" (types: %v)", types))
+					}
 				}
+				details.WriteString("\n")
 			}
-			details.WriteString("\n")
 		}
 	}
 
 	return details.String()
 }
 
-func formatResponseDetails(response *openapi3.Response) string {
+func formatResponseDetails(response *v3.Response) string {
 	var details strings.Builder
 
 	if response == nil {
 		return "No response details available"
 	}
 
-	if len(response.Content) > 0 {
+	if response.Content != nil && response.Content.Len() > 0 {
 		details.WriteString("Content Types:\n")
 
 		// Get media types and sort them for stable ordering
 		var mediaTypes []string
-		for mediaType := range response.Content {
-			mediaTypes = append(mediaTypes, mediaType)
+		for pair := response.Content.First(); pair != nil; pair = pair.Next() {
+			mediaTypes = append(mediaTypes, pair.Key())
 		}
 		sort.Strings(mediaTypes)
 
 		for _, mediaType := range mediaTypes {
-			mediaTypeObj := response.Content[mediaType]
-			details.WriteString(fmt.Sprintf("  - %s", mediaType))
-			if mediaTypeObj.Schema != nil && mediaTypeObj.Schema.Value != nil && mediaTypeObj.Schema.Value.Type != nil && len(*mediaTypeObj.Schema.Value.Type) > 0 {
-				types := *mediaTypeObj.Schema.Value.Type
-				if len(types) == 1 {
-					details.WriteString(fmt.Sprintf(" (type: %s)", types[0]))
-				} else {
-					details.WriteString(fmt.Sprintf(" (types: %v)", types))
+			if mediaTypeObj, ok := response.Content.Get(mediaType); ok && mediaTypeObj != nil {
+				details.WriteString(fmt.Sprintf("  - %s", mediaType))
+				if mediaTypeObj.Schema != nil && mediaTypeObj.Schema.Schema() != nil && len(mediaTypeObj.Schema.Schema().Type) > 0 {
+					types := mediaTypeObj.Schema.Schema().Type
+					if len(types) == 1 {
+						details.WriteString(fmt.Sprintf(" (type: %s)", types[0]))
+					} else {
+						details.WriteString(fmt.Sprintf(" (types: %v)", types))
+					}
 				}
+				details.WriteString("\n")
 			}
-			details.WriteString("\n")
 		}
 	}
 
-	if len(response.Headers) > 0 {
+	if response.Headers != nil && response.Headers.Len() > 0 {
 		details.WriteString("Headers:\n")
 
 		// Get header names and sort them for stable ordering
 		var headerNames []string
-		for headerName := range response.Headers {
-			headerNames = append(headerNames, headerName)
+		for pair := response.Headers.First(); pair != nil; pair = pair.Next() {
+			headerNames = append(headerNames, pair.Key())
 		}
 		sort.Strings(headerNames)
 
@@ -491,7 +475,7 @@ func formatResponseDetails(response *openapi3.Response) string {
 	return details.String()
 }
 
-func formatParameterDetails(param *openapi3.Parameter) string {
+func formatParameterDetails(param *v3.Parameter) string {
 	var details strings.Builder
 
 	if param == nil {
@@ -500,19 +484,19 @@ func formatParameterDetails(param *openapi3.Parameter) string {
 
 	details.WriteString(fmt.Sprintf("In: %s\n", param.In))
 
-	if param.Required {
+	if param.Required != nil && *param.Required {
 		details.WriteString("Required: true\n")
 	}
 
-	if param.Schema != nil && param.Schema.Value != nil && param.Schema.Value.Type != nil && len(*param.Schema.Value.Type) > 0 {
-		types := *param.Schema.Value.Type
+	if param.Schema != nil && param.Schema.Schema() != nil && len(param.Schema.Schema().Type) > 0 {
+		types := param.Schema.Schema().Type
 		if len(types) == 1 {
 			details.WriteString(fmt.Sprintf("Type: %s\n", types[0]))
 		} else {
 			details.WriteString(fmt.Sprintf("Types: %v\n", types))
 		}
-		if param.Schema.Value.Format != "" {
-			details.WriteString(fmt.Sprintf("Format: %s\n", param.Schema.Value.Format))
+		if param.Schema.Schema().Format != "" {
+			details.WriteString(fmt.Sprintf("Format: %s\n", param.Schema.Schema().Format))
 		}
 	}
 
@@ -523,7 +507,7 @@ func formatParameterDetails(param *openapi3.Parameter) string {
 	return details.String()
 }
 
-func formatHeaderDetails(header *openapi3.Header) string {
+func formatHeaderDetails(header *v3.Header) string {
 	var details strings.Builder
 
 	if header == nil {
@@ -534,22 +518,22 @@ func formatHeaderDetails(header *openapi3.Header) string {
 		details.WriteString("Required: true\n")
 	}
 
-	if header.Schema != nil && header.Schema.Value != nil && header.Schema.Value.Type != nil && len(*header.Schema.Value.Type) > 0 {
-		types := *header.Schema.Value.Type
+	if header.Schema != nil && header.Schema.Schema() != nil && len(header.Schema.Schema().Type) > 0 {
+		types := header.Schema.Schema().Type
 		if len(types) == 1 {
 			details.WriteString(fmt.Sprintf("Type: %s\n", types[0]))
 		} else {
 			details.WriteString(fmt.Sprintf("Types: %v\n", types))
 		}
-		if header.Schema.Value.Format != "" {
-			details.WriteString(fmt.Sprintf("Format: %s\n", header.Schema.Value.Format))
+		if header.Schema.Schema().Format != "" {
+			details.WriteString(fmt.Sprintf("Format: %s\n", header.Schema.Schema().Format))
 		}
 	}
 
 	return details.String()
 }
 
-func formatSecuritySchemeDetails(name string, secScheme *openapi3.SecurityScheme) string {
+func formatSecuritySchemeDetails(name string, secScheme *v3.SecurityScheme) string {
 	var details strings.Builder
 
 	if secScheme == nil {
@@ -588,8 +572,8 @@ func formatWebhookDetails(hook webhook) string {
 		details.WriteString(fmt.Sprintf("Description: %s\n", hook.op.Description))
 	}
 
-	if hook.op.OperationID != "" {
-		details.WriteString(fmt.Sprintf("Operation ID: %s\n", hook.op.OperationID))
+	if hook.op.OperationId != "" {
+		details.WriteString(fmt.Sprintf("Operation ID: %s\n", hook.op.OperationId))
 	}
 
 	return details.String()

@@ -18,12 +18,15 @@ Press `?` to see the help screen with all available keyboard shortcuts.
 
 ## OpenAPI Support
 
-`oq` supports both modern major OpenAPI specification versions:
+`oq` supports all 3.* OpenAPI specification versions:
 
-- **OpenAPI 3.0.x**
-- **OpenAPI 3.1.x** - by hacky conversion for now until [kin-openapi adds 3.1 support](https://github.com/getkin/kin-openapi/issues/230)
+- 3.0
+- 3.1
+- 3.2
 
 Both JSON and YAML formats are supported.
+
+Note: `oq` uses the [libopenapi](https://github.com/pb33f/libopenapi) library as it supports all OpenAPI versions and is actively maintained.
 
 ## Installation
 
@@ -58,6 +61,8 @@ MIT License - see LICENSE file for details.
 Contributions are welcome! Please feel free to submit issues and pull requests.
 
 When contributing:
+
 1. Ensure tests pass: `go test -v`
-2. Test with both OpenAPI 3.0 and 3.1 examples
+2. Test all suppoerted OpenAPI versions (3.0, 3.1, 3.2)
 3. If the UI changes, make sure to run `vhs preview.tape` to generate a new preview GIF
+4. Try to extend test coverage by introducing new example OpenAPI specs in the `examples` folder

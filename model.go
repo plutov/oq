@@ -5,7 +5,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/getkin/kin-openapi/openapi3"
+	v3 "github.com/pb33f/libopenapi/datamodel/high/v3"
 )
 
 type viewMode int
@@ -43,14 +43,14 @@ func calculateContentWidth(totalWidth int) int {
 type webhook struct {
 	name   string
 	method string
-	op     *openapi3.Operation
+	op     *v3.Operation
 	folded bool
 }
 
 type endpoint struct {
 	path   string
 	method string
-	op     *openapi3.Operation
+	op     *v3.Operation
 	folded bool
 }
 
@@ -63,7 +63,7 @@ type component struct {
 }
 
 type Model struct {
-	doc          *openapi3.T
+	doc          *v3.Document
 	endpoints    []endpoint
 	components   []component
 	webhooks     []webhook
@@ -194,28 +194,10 @@ func (m *Model) ensureCursorVisible() {
 	}
 }
 
-func NewModel(doc *openapi3.T) Model {
+func NewModel(doc *v3.Document) Model {
 	endpoints := extractEndpoints(doc)
 	components := extractComponents(doc)
 	webhooks := extractWebhooks(doc)
-
-	return Model{
-		doc:          doc,
-		endpoints:    endpoints,
-		components:   components,
-		webhooks:     webhooks,
-		cursor:       0,
-		mode:         viewEndpoints,
-		width:        80,
-		height:       24,
-		showHelp:     false,
-		scrollOffset: 0,
-	}
-}
-
-func NewModelWithWebhooks(doc *openapi3.T, webhooks []webhook) Model {
-	endpoints := extractEndpoints(doc)
-	components := extractComponents(doc)
 
 	return Model{
 		doc:          doc,
