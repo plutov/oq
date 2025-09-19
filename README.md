@@ -30,17 +30,28 @@ Note: `oq` uses the [libopenapi](https://github.com/pb33f/libopenapi) library as
 
 ## Installation
 
+Using go install:
+
+```bash
+go install github.com/plutov/oq@latest
+```
+
+<details>
+<summary>Package managers</summary>
+
 Using Homebrew (macOS/Linux):
 
 ```bash
 brew install plutov/tap/oq
 ```
 
-Or using go install:
+Arch Linux (AUR):
 
 ```bash
-go install github.com/plutov/oq@latest
+yay -S oq-openapi-viewer-git
 ```
+
+</details>
 
 You can also download the compiled binaries from the Releases page.
 
@@ -54,7 +65,7 @@ go build -o oq .
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
