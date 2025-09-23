@@ -386,6 +386,8 @@ func (m Model) renderHelpModal() string {
 		{"↓/j", "Move down"},
 		{"gg", "Move to the top"},
 		{"G", "Move to the bottom"},
+		{"Ctrl-U", "Scroll up by half a screen"},
+		{"Ctrl-D", "Scroll down by half a screen"},
 		{"Tab/L", "Cycle forward through views"},
 		{"Shift+Tab/H", "Cycle backward through views"},
 		{"Enter/Space", "Toggle details"},
