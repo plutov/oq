@@ -18,6 +18,8 @@ const (
 
 const keySequenceThreshold = 500 * time.Millisecond
 
+const scrollHalfScreenLines = 21
+
 // Layout constants (shared with view.go)
 const (
 	// Height
@@ -113,6 +115,19 @@ func (m *Model) getItemHeight(index int) int {
 		return 1 + strings.Count(details, "\n") + 1 // +1 for main line, +1 for the detail section
 	}
 	return 1
+}
+
+func (m *Model) getMaxItems() int {
+	switch m.mode {
+	case viewEndpoints:
+		return len(m.endpoints) - 1
+	case viewComponents:
+		return len(m.components) - 1
+	case viewWebhooks:
+		return len(m.webhooks) - 1
+	default:
+		return -1
+	}
 }
 
 func (m *Model) ensureCursorVisible() {
@@ -290,34 +305,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "down", "j":
 			if !m.showHelp {
-				var maxItems int
-				switch m.mode {
-				case viewEndpoints:
-					maxItems = len(m.endpoints) - 1
-				case viewComponents:
-					maxItems = len(m.components) - 1
-				case viewWebhooks:
-					maxItems = len(m.webhooks) - 1
-				}
-
-				if m.cursor < maxItems {
+				if m.cursor < m.getMaxItems() {
 					m.cursor++
 					m.ensureCursorVisible()
 				}
 			}
 
-		case "G":
+		case "ctrl+d":
 			if !m.showHelp {
-				var maxItems int
-				switch m.mode {
-				case viewEndpoints:
-					maxItems = len(m.endpoints) - 1
-				case viewComponents:
-					maxItems = len(m.components) - 1
-				case viewWebhooks:
-					maxItems = len(m.webhooks) - 1
+				maxItems := m.getMaxItems()
+				newCursorPos := m.cursor + scrollHalfScreenLines
+
+				if newCursorPos > maxItems {
+					m.cursor = maxItems
+				} else {
+					m.cursor += scrollHalfScreenLines
 				}
 
+				m.ensureCursorVisible()
+			}
+
+		case "ctrl+u":
+			if !m.showHelp {
+				halfLines := max(1, calculateContentHeight(m.height)/2)
+				if m.cursor < halfLines {
+					m.cursor = 0
+				} else {
+					m.cursor -= halfLines
+				}
+
+				m.ensureCursorVisible()
+			}
+
+		case "G":
+			if !m.showHelp {
+				maxItems := m.getMaxItems()
 				if maxItems >= 0 {
 					m.cursor = maxItems
 					m.ensureCursorVisible()
