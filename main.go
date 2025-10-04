@@ -33,9 +33,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	v3Model, errs := document.BuildV3Model()
-	if len(errs) > 0 {
-		fmt.Fprintf(os.Stderr, "Error building v3 model: %v\n", errs[0])
+	v3Model, err := document.BuildV3Model()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error building V3 model: %v\n", err)
 		os.Exit(1)
 	}
 

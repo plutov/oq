@@ -21,19 +21,19 @@ const (
 	colorWhite       = "#FFFFFF"
 )
 
+var methodColors = map[string]lipgloss.Color{
+	"GET":     colorGreen,
+	"POST":    colorBlue,
+	"PUT":     colorYellow,
+	"DELETE":  colorRed,
+	"PATCH":   colorPurple,
+	"HEAD":    colorGray,
+	"OPTIONS": colorGray,
+	"TRACE":   colorGray,
+}
+
 func (m Model) renderEndpoints() string {
 	var s strings.Builder
-
-	methodColors := map[string]lipgloss.Color{
-		"GET":     colorGreen,
-		"POST":    colorBlue,
-		"PUT":     colorYellow,
-		"DELETE":  colorRed,
-		"PATCH":   colorPurple,
-		"HEAD":    colorGray,
-		"OPTIONS": colorGray,
-		"TRACE":   colorGray,
-	}
 
 	// Calculate available content height and width
 	contentHeight := calculateContentHeight(m.height)
@@ -161,7 +161,7 @@ func (m Model) renderComponents() string {
 		var line strings.Builder
 		line.WriteString(style.Render(foldIcon + " "))
 		line.WriteString(typeStyle.Render(comp.compType + ":"))
-		line.WriteString(style.Render(comp.name))
+		line.WriteString(style.Render(comp.name + " "))
 		line.WriteString(style.Render(strings.Repeat(" ", contentWidth)))
 
 		if comp.description != "" {
@@ -194,17 +194,6 @@ func (m Model) renderComponents() string {
 
 func (m Model) renderWebhooks() string {
 	var s strings.Builder
-
-	methodColors := map[string]lipgloss.Color{
-		"GET":     colorGreen,
-		"POST":    colorBlue,
-		"PUT":     colorYellow,
-		"DELETE":  colorRed,
-		"PATCH":   colorPurple,
-		"HEAD":    colorGray,
-		"OPTIONS": colorGray,
-		"TRACE":   colorGray,
-	}
 
 	// Calculate available content height and width
 	contentHeight := calculateContentHeight(m.height)
@@ -249,7 +238,7 @@ func (m Model) renderWebhooks() string {
 		var line strings.Builder
 		line.WriteString(style.Render(foldIcon + " "))
 		line.WriteString(methodStyle.Render(hook.method + " "))
-		line.WriteString(style.Render(" " + hook.name))
+		line.WriteString(style.Render(hook.name + " "))
 		line.WriteString(style.Render(strings.Repeat(" ", contentWidth)))
 
 		s.WriteString(style.Render(line.String()))
