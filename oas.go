@@ -281,6 +281,14 @@ func formatEndpointDetails(ep endpoint) string {
 	if ep.op.RequestBody != nil {
 		details.WriteString("Request Body:\n")
 
+		if ep.op.RequestBody.Description != "" {
+			details.WriteString(fmt.Sprintf("  Description: %s\n", ep.op.RequestBody.Description))
+		}
+
+		if ep.op.RequestBody.Required != nil && *ep.op.RequestBody.Required {
+			details.WriteString("  Required: true\n")
+		}
+
 		// Get media types and sort them for stable ordering
 		var mediaTypes []string
 		if ep.op.RequestBody.Content != nil {
@@ -290,8 +298,33 @@ func formatEndpointDetails(ep endpoint) string {
 		}
 		sort.Strings(mediaTypes)
 
+		// Display media type with schema information - either a reference to a component schema
+		// (e.g., "#/components/schemas/Pet") or an inline schema type (e.g., "object", "string")
 		for _, mediaType := range mediaTypes {
-			details.WriteString(fmt.Sprintf("  - %s\n", mediaType))
+			if mediaTypeObj, ok := ep.op.RequestBody.Content.Get(mediaType); ok && mediaTypeObj != nil {
+				details.WriteString(fmt.Sprintf("  - %s", mediaType))
+				if mediaTypeObj.Schema != nil {
+					// Check if it's a reference first
+					if mediaTypeObj.Schema.GetReference() != "" {
+						ref := mediaTypeObj.Schema.GetReference()
+						// Extract just the schema name from the reference path
+						parts := strings.Split(ref, "/")
+						if len(parts) > 0 {
+							schemaName := parts[len(parts)-1]
+							details.WriteString(fmt.Sprintf(" (schema: %s)", schemaName))
+						}
+					} else if mediaTypeObj.Schema.Schema() != nil && len(mediaTypeObj.Schema.Schema().Type) > 0 {
+						// If it's an inline schema with a type
+						types := mediaTypeObj.Schema.Schema().Type
+						if len(types) == 1 {
+							details.WriteString(fmt.Sprintf(" (type: %s)", types[0]))
+						} else {
+							details.WriteString(fmt.Sprintf(" (types: %v)", types))
+						}
+					}
+				}
+				details.WriteString("\n")
+			}
 		}
 	}
 

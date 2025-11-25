@@ -272,6 +272,79 @@ func TestModelNavigation(t *testing.T) {
 	}
 }
 
+func TestPetstoreRequestBodySchemaDisplay(t *testing.T) {
+	filepath := "examples/petstore-3.0.yaml"
+	if _, err := os.Stat(filepath); os.IsNotExist(err) {
+		t.Skip("petstore-3.0.yaml not found, skipping test")
+		return
+	}
+
+	content, err := os.ReadFile(filepath)
+	if err != nil {
+		t.Fatalf("Failed to read petstore: %v", err)
+	}
+
+	document, err := libopenapi.NewDocument(content)
+	if err != nil {
+		t.Fatalf("Error creating document: %v", err)
+	}
+
+	v3Model, err := document.BuildV3Model()
+	if err != nil {
+		t.Fatalf("Error building v3 model: %v", err)
+	}
+
+	model := NewModel(&v3Model.Model)
+
+	var addPetEndpoint *endpoint
+	for i := range model.endpoints {
+		if model.endpoints[i].path == "/pet" && model.endpoints[i].method == "POST" {
+			addPetEndpoint = &model.endpoints[i]
+			break
+		}
+	}
+
+	if addPetEndpoint == nil {
+		t.Fatal("Could not find POST /pet endpoint")
+	}
+
+	details := formatEndpointDetails(*addPetEndpoint)
+
+	// Verify request body shows description
+	if !strings.Contains(details, "Create a new pet in the store") {
+		t.Error("Request body description not displayed")
+	}
+
+	// Verify required status is shown
+	if !strings.Contains(details, "Required: true") {
+		t.Error("Request body required status not displayed")
+	}
+
+	// Verify schema references are shown for all media types
+	expectedSchemas := []string{
+		"application/json (schema: Pet)",
+		"application/xml (schema: Pet)",
+		"application/x-www-form-urlencoded (schema: Pet)",
+	}
+
+	for _, expected := range expectedSchemas {
+		if !strings.Contains(details, expected) {
+			t.Errorf("Expected schema reference not found: %s", expected)
+		}
+	}
+	// Verify media types are sorted alphabetically
+	jsonIdx := strings.Index(details, "application/json")
+	xmlIdx := strings.Index(details, "application/xml")
+	formIdx := strings.Index(details, "application/x-www-form-urlencoded")
+
+	if jsonIdx == -1 || xmlIdx == -1 || formIdx == -1 {
+		t.Fatal("Not all media types found in output")
+	}
+
+	if !(jsonIdx < formIdx && formIdx < xmlIdx) {
+		t.Error("Media types are not sorted alphabetically")
+	}
+}
 func TestEmptyDocument(t *testing.T) {
 	minimalSpec := `{
 		"openapi": "3.0.3",
