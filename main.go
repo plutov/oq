@@ -4,17 +4,22 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pb33f/libopenapi"
+	"github.com/pb33f/libopenapi/datamodel"
 )
 
 func main() {
 	var content []byte
 	var err error
 
+	var specFile string
+
 	if len(os.Args) > 1 {
-		content, err = os.ReadFile(os.Args[1])
+		specFile = os.Args[1]
+		content, err = os.ReadFile(specFile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
 			os.Exit(1)
@@ -27,7 +32,15 @@ func main() {
 		}
 	}
 
-	document, err := libopenapi.NewDocument(content)
+	config := datamodel.NewDocumentConfiguration()
+	if specFile != "" {
+		absPath, _ := filepath.Abs(specFile)
+		config.BasePath = filepath.Dir(absPath)
+		config.SpecFilePath = absPath
+		config.AllowFileReferences = true
+	}
+
+	document, err := libopenapi.NewDocumentWithConfiguration(content, config)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating document: %v\n", err)
 		os.Exit(1)

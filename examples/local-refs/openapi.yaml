@@ -1,0 +1,22 @@
+openapi: "3.0.3"
+info:
+  title: Local Refs Test API
+  version: "1.0.0"
+paths:
+  /pets:
+    get:
+      summary: List pets
+      operationId: listPets
+      responses:
+        "200":
+          description: A list of pets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "pet.yaml"
+components:
+  schemas:
+    Pet:
+      $ref: "pet.yaml"

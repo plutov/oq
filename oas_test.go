@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/pb33f/libopenapi"
+	"github.com/pb33f/libopenapi/datamodel"
 )
 
 func TestAllExampleFiles(t *testing.T) {
@@ -36,30 +37,46 @@ func TestAllExampleFiles(t *testing.T) {
 	}
 }
 
-func testExampleFile(t *testing.T, filepath string) {
-	content, err := os.ReadFile(filepath)
+func newDocumentFromFile(t *testing.T, specPath string) libopenapi.Document {
+	t.Helper()
+	content, err := os.ReadFile(specPath)
 	if err != nil {
-		t.Fatalf("Failed to read file %s: %v", filepath, err)
+		t.Fatalf("Failed to read file %s: %v", specPath, err)
 	}
 
-	document, err := libopenapi.NewDocument(content)
+	absPath, err := filepath.Abs(specPath)
 	if err != nil {
-		t.Fatalf("Error creating document from %s: %v", filepath, err)
+		t.Fatalf("Failed to get absolute path for %s: %v", specPath, err)
 	}
+
+	config := datamodel.NewDocumentConfiguration()
+	config.BasePath = filepath.Dir(absPath)
+	config.SpecFilePath = absPath
+	config.AllowFileReferences = true
+
+	document, err := libopenapi.NewDocumentWithConfiguration(content, config)
+	if err != nil {
+		t.Fatalf("Error creating document from %s: %v", specPath, err)
+	}
+	return document
+}
+
+func testExampleFile(t *testing.T, fp string) {
+	document := newDocumentFromFile(t, fp)
 
 	v3Model, err := document.BuildV3Model()
 	if err != nil {
-		t.Fatalf("Error building v3 model from %s: %v", filepath, err)
+		t.Fatalf("Error building v3 model from %s: %v", fp, err)
 	}
 
 	if v3Model == nil {
-		t.Fatalf("V3 model is nil for %s", filepath)
+		t.Fatalf("V3 model is nil for %s", fp)
 	}
 
 	model := NewModel(&v3Model.Model)
 
 	if model.doc == nil {
-		t.Fatalf("Model document is nil for %s", filepath)
+		t.Fatalf("Model document is nil for %s", fp)
 	}
 
 	endpoints := model.endpoints
@@ -68,7 +85,7 @@ func testExampleFile(t *testing.T, filepath string) {
 		details := formatEndpointDetails(ep)
 		if details == "" {
 			t.Errorf("Empty endpoint details for endpoint %d (%s %s) in %s",
-				i, ep.method, ep.path, filepath)
+				i, ep.method, ep.path, fp)
 		}
 	}
 
@@ -91,7 +108,7 @@ func testExampleFile(t *testing.T, filepath string) {
 		}
 	}
 
-	testModelRendering(t, &model, filepath)
+	testModelRendering(t, &model, fp)
 }
 
 func testModelRendering(t *testing.T, model *Model, filepath string) {
@@ -172,26 +189,18 @@ func TestSpecificExampleFiles(t *testing.T) {
 
 	for _, test := range specificTests {
 		t.Run(test.filename, func(t *testing.T) {
-			filepath := filepath.Join("examples", test.filename)
+			fp := filepath.Join("examples", test.filename)
 
-			if _, err := os.Stat(filepath); os.IsNotExist(err) {
-				t.Skipf("File %s does not exist, skipping", filepath)
+			if _, err := os.Stat(fp); os.IsNotExist(err) {
+				t.Skipf("File %s does not exist, skipping", fp)
 				return
 			}
 
-			content, err := os.ReadFile(filepath)
-			if err != nil {
-				t.Fatalf("Failed to read %s: %v", filepath, err)
-			}
-
-			document, err := libopenapi.NewDocument(content)
-			if err != nil {
-				t.Fatalf("Error creating document from %s: %v", filepath, err)
-			}
+			document := newDocumentFromFile(t, fp)
 
 			v3Model, err := document.BuildV3Model()
 			if err != nil {
-				t.Fatalf("Error building v3 model from %s: %v", filepath, err)
+				t.Fatalf("Error building v3 model from %s: %v", fp, err)
 			}
 
 			model := NewModel(&v3Model.Model)
@@ -214,21 +223,13 @@ func TestSpecificExampleFiles(t *testing.T) {
 }
 
 func TestModelNavigation(t *testing.T) {
-	filepath := "examples/petstore-3.0.yaml"
-	if _, err := os.Stat(filepath); os.IsNotExist(err) {
+	fp := "examples/petstore-3.0.yaml"
+	if _, err := os.Stat(fp); os.IsNotExist(err) {
 		t.Skip("petstore-3.0.yaml not found, skipping navigation test")
 		return
 	}
 
-	content, err := os.ReadFile(filepath)
-	if err != nil {
-		t.Fatalf("Failed to read petstore: %v", err)
-	}
-
-	document, err := libopenapi.NewDocument(content)
-	if err != nil {
-		t.Fatalf("Error creating document: %v", err)
-	}
+	document := newDocumentFromFile(t, fp)
 
 	v3Model, err := document.BuildV3Model()
 	if err != nil {
@@ -273,21 +274,13 @@ func TestModelNavigation(t *testing.T) {
 }
 
 func TestPetstoreRequestBodySchemaDisplay(t *testing.T) {
-	filepath := "examples/petstore-3.0.yaml"
-	if _, err := os.Stat(filepath); os.IsNotExist(err) {
+	fp := "examples/petstore-3.0.yaml"
+	if _, err := os.Stat(fp); os.IsNotExist(err) {
 		t.Skip("petstore-3.0.yaml not found, skipping test")
 		return
 	}
 
-	content, err := os.ReadFile(filepath)
-	if err != nil {
-		t.Fatalf("Failed to read petstore: %v", err)
-	}
-
-	document, err := libopenapi.NewDocument(content)
-	if err != nil {
-		t.Fatalf("Error creating document: %v", err)
-	}
+	document := newDocumentFromFile(t, fp)
 
 	v3Model, err := document.BuildV3Model()
 	if err != nil {
@@ -345,6 +338,35 @@ func TestPetstoreRequestBodySchemaDisplay(t *testing.T) {
 		t.Error("Media types are not sorted alphabetically")
 	}
 }
+func TestLocalReferences(t *testing.T) {
+	fp := "examples/local-refs/openapi.yaml"
+	if _, err := os.Stat(fp); os.IsNotExist(err) {
+		t.Skip("local-refs example not found, skipping")
+		return
+	}
+
+	document := newDocumentFromFile(t, fp)
+
+	v3Model, err := document.BuildV3Model()
+	if err != nil {
+		t.Fatalf("Error building v3 model: %v", err)
+	}
+
+	model := NewModel(&v3Model.Model)
+
+	if len(model.endpoints) == 0 {
+		t.Error("Expected at least one endpoint from local-refs spec")
+	}
+
+	if len(model.components) == 0 {
+		t.Error("Expected at least one component from local-refs spec")
+	}
+
+	model.width = 120
+	model.height = 40
+	testModelRendering(t, &model, fp)
+}
+
 func TestEmptyDocument(t *testing.T) {
 	minimalSpec := `{
 		"openapi": "3.0.3",
