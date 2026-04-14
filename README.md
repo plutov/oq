@@ -77,3 +77,4 @@ When contributing:
 2. Test all supported OpenAPI versions (3.0, 3.1, 3.2)
 3. If the UI changes, make sure to run `vhs preview.tape` to generate a new preview GIF
 4. Try to extend test coverage by introducing new example OpenAPI specs in the `examples` folder
+5. ...
