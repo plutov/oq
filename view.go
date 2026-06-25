@@ -349,14 +349,21 @@ func (m Model) renderFooter() string {
 		Width(m.width).
 		Align(lipgloss.Left)
 
-	availableWidth := m.width - len(schemaInfo) - 4
-	if len(helpText) > availableWidth {
+	schemaWidth := lipgloss.Width(schemaInfo)
+
+	availableWidth := m.width - schemaWidth - 4
+	if lipgloss.Width(helpText) > availableWidth {
 		helpText = ""
+	}
+
+	pad := m.width - lipgloss.Width(helpText) - schemaWidth - 2
+	if pad < 0 {
+		pad = 0
 	}
 
 	footerContent := fmt.Sprintf("%s%s%s",
 		helpText,
-		strings.Repeat(" ", m.width-len(helpText)-len(schemaInfo)-2),
+		strings.Repeat(" ", pad),
 		schemaInfo)
 
 	return "\n" + footerStyle.Render(footerContent)

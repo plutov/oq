@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -365,6 +366,55 @@ func TestLocalReferences(t *testing.T) {
 	model.width = 120
 	model.height = 40
 	testModelRendering(t, &model, fp)
+}
+
+func TestFooterRenderNarrowWidth(t *testing.T) {
+	// Regression: renderFooter computed a padding count of
+	// m.width - len(helpText) - len(schemaInfo) - 2 and passed it to
+	// strings.Repeat without clamping. A long info.title/version or a narrow
+	// terminal made the count negative and strings.Repeat panicked
+	// ("strings: negative Repeat count"), crashing the whole TUI.
+	longTitleSpec := `{
+		"openapi": "3.0.3",
+		"info": {
+			"title": "A Very Long OpenAPI Specification Title That Easily Exceeds Any Reasonable Terminal Width",
+			"version": "1.2.3-rc.1+build.456"
+		},
+		"paths": {}
+	}`
+
+	document, err := libopenapi.NewDocument([]byte(longTitleSpec))
+	if err != nil {
+		t.Fatalf("Error creating document: %v", err)
+	}
+
+	v3Model, err := document.BuildV3Model()
+	if err != nil {
+		t.Fatalf("Error building v3 model: %v", err)
+	}
+
+	model := NewModel(&v3Model.Model)
+
+	// Widths small enough that title+version overflow the footer, plus the
+	// zero-width edge case. Pre-fix, each of these panicked.
+	for _, width := range []int{0, 1, 10, 40} {
+		t.Run(fmt.Sprintf("width=%d", width), func(t *testing.T) {
+			model.width = width
+			model.height = 24
+
+			// renderFooter is reached through View(); call both so a
+			// regression in either path is caught.
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						t.Fatalf("renderFooter panicked at width %d: %v", width, r)
+					}
+				}()
+				_ = model.renderFooter()
+				_ = model.View()
+			}()
+		})
+	}
 }
 
 func TestEmptyDocument(t *testing.T) {
