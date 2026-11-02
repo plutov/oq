@@ -10,7 +10,7 @@ import (
 func main() {
 	doc, err := loadDocument(os.Args[1:], os.Stdin)
 	if err == nil {
-		_, err = tea.NewProgram(NewModel(doc), tea.WithAltScreen()).Run()
+		_, err = tea.NewProgram(NewModel(doc), tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "oq: %v\n", err)

@@ -1,0 +1,87 @@
+openapi: 3.2.0
+info:
+  title: Catalog API
+  version: 1.0.0
+paths:
+  /products/{id}:
+    parameters:
+      - name: id
+        in: path
+        description: Product identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+    query:
+      summary: Search a product's offers
+      description: Accepts a structured search expression without changing the product.
+      operationId: queryProduct
+      tags: [products]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expression:
+                  type: string
+      responses:
+        '200':
+          description: Matching product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          headers:
+            X-Request-ID:
+              description: Request tracing identifier
+              schema:
+                type: string
+                format: uuid
+    additionalOperations:
+      COPY:
+        summary: Copy a product
+        operationId: copyProduct
+        parameters:
+          - name: destination
+            in: header
+            required: true
+            schema:
+              type: string
+        responses:
+          '201':
+            description: Product copied
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/Product'
+webhooks:
+  productChanged:
+    post:
+      summary: Notify subscribers about a product change
+      operationId: productChanged
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Product'
+      responses:
+        '204':
+          description: Notification accepted
+components:
+  schemas:
+    Product:
+      description: A catalog product
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        discontinuedAt:
+          type: [string, 'null']
+          format: date-time

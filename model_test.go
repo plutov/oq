@@ -17,6 +17,8 @@ func press(m Model, key string) (Model, tea.Cmd) {
 		"ctrl+c": tea.KeyCtrlC, "ctrl+d": tea.KeyCtrlD, "ctrl+u": tea.KeyCtrlU,
 		"tab": tea.KeyTab, "shift+tab": tea.KeyShiftTab, "enter": tea.KeyEnter,
 		"esc": tea.KeyEsc, "up": tea.KeyUp, "down": tea.KeyDown,
+		"backspace": tea.KeyBackspace, "pgup": tea.KeyPgUp, "pgdown": tea.KeyPgDown,
+		" ": tea.KeySpace,
 	}
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
 	if kind, ok := keys[key]; ok {
@@ -195,6 +197,53 @@ func TestExpandedItemScrollingAndResize(t *testing.T) {
 	}
 }
 
+func TestResizeKeepsVisibleSelection(t *testing.T) {
+	m := listModel(100)
+	m, _ = press(m, "G")
+	if m.cursor != 99 || m.scrollOffset != 80 {
+		t.Fatalf("initial cursor=%d offset=%d", m.cursor, m.scrollOffset)
+	}
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 10})
+	m = updated.(Model)
+	if m.cursor != 99 || m.scrollOffset != 94 || !strings.Contains(m.renderItems(), "/item-099") {
+		t.Fatalf("selection hidden after shrink: cursor=%d offset=%d", m.cursor, m.scrollOffset)
+	}
+	assertViewport(t, m)
+}
+
+func TestResizePreservesManualScroll(t *testing.T) {
+	t.Run("selection offscreen", func(t *testing.T) {
+		m := listModel(100)
+		m, _ = press(m, "pgdown")
+		for _, height := range []int{10, 24} {
+			updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: height})
+			m = updated.(Model)
+			if m.cursor != 0 || m.scrollOffset != 20 {
+				t.Fatalf("height %d: cursor=%d offset=%d", height, m.cursor, m.scrollOffset)
+			}
+			assertViewport(t, m)
+		}
+	})
+	t.Run("inside selected details", func(t *testing.T) {
+		m := listModel(1)
+		m.activeItems()[0].details = strings.Repeat("detail\n", 60)
+		m, _ = press(m, "enter")
+		m, _ = press(m, "pgdown")
+		for _, height := range []int{10, 24, 50, 100} {
+			updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: height})
+			m = updated.(Model)
+			want := min(20, max(0, m.totalLines()-m.contentHeight()))
+			if m.cursor != 0 || m.scrollOffset != want {
+				t.Fatalf("height %d: cursor=%d offset=%d, want offset=%d", height, m.cursor, m.scrollOffset, want)
+			}
+			if !strings.Contains(m.renderItems(), "detail") {
+				t.Fatalf("height %d: details not visible", height)
+			}
+			assertViewport(t, m)
+		}
+	})
+}
+
 func TestViewportDimensions(t *testing.T) {
 	m := NewModel(parseSpec(t, operationSpec))
 	for _, size := range [][2]int{{120, 40}, {80, 24}, {20, 10}, {1, 1}, {0, 0}} {
@@ -249,7 +298,7 @@ func FuzzModelNavigation(f *testing.F) {
 			} else {
 				m, _ = press(m, keys[int(value)%len(keys)])
 			}
-			if m.cursor < 0 || m.cursor >= len(m.activeItems()) || m.scrollOffset < 0 || m.scrollOffset > m.cursor {
+			if m.cursor < 0 || m.cursor >= len(m.activeItems()) || m.scrollOffset < 0 || m.scrollOffset > max(0, m.totalLines()-m.contentHeight()) {
 				t.Fatalf("invalid cursor=%d offset=%d", m.cursor, m.scrollOffset)
 			}
 			assertViewport(t, m)
@@ -267,5 +316,250 @@ func TestProgramLifecycle(t *testing.T) {
 	)
 	if _, err := program.Run(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestSearchAcrossViews(t *testing.T) {
+	for _, mode := range []viewMode{viewEndpoints, viewComponents, viewWebhooks} {
+		for _, field := range []string{"name", "kind", "description", "details"} {
+			t.Run(fmt.Sprintf("%d/%s", mode, field), func(t *testing.T) {
+				m := listModel(6)
+				m.mode, m.height = mode, 7
+				for _, i := range []int{2, 5} {
+					entry := &m.items[mode][i]
+					switch field {
+					case "name":
+						entry.name = "Needle"
+					case "kind":
+						entry.kind = "Needle"
+					case "description":
+						entry.description = "Needle"
+					case "details":
+						entry.details = "Needle"
+					}
+				}
+				m, _ = press(m, "/")
+				m, _ = press(m, "nEeDlE")
+				if m.cursor != 2 || !m.searching || !strings.Contains(m.renderFooter(), "Match 1/2") {
+					t.Fatalf("incremental match: cursor=%d footer=%s", m.cursor, m.renderFooter())
+				}
+				m, _ = press(m, "enter")
+				if m.searching || !m.activeItems()[2].folded {
+					t.Fatal("accepting search toggled details or left search open")
+				}
+				for _, step := range []struct {
+					key  string
+					want int
+				}{{"n", 5}, {"n", 2}, {"N", 5}, {"N", 2}} {
+					m, _ = press(m, step.key)
+					if m.cursor != step.want || !strings.Contains(m.renderItems(), "Needle") && field != "details" {
+						t.Fatalf("%s selected %d, want visible %d", step.key, m.cursor, step.want)
+					}
+					assertViewport(t, m)
+				}
+				m, _ = press(m, "tab")
+				if m.queries[m.mode] != "" || m.cursor != 0 {
+					t.Fatal("view switch leaked query or cursor")
+				}
+				m, _ = press(m, "shift+tab")
+				m, _ = press(m, "n")
+				if m.mode != mode || m.cursor != 2 || m.queries[mode] != "nEeDlE" {
+					t.Fatal("view query was not preserved")
+				}
+			})
+		}
+	}
+}
+
+func TestSearchInputAndCancellation(t *testing.T) {
+	for _, mode := range []viewMode{viewEndpoints, viewComponents, viewWebhooks} {
+		m := listModel(30)
+		m.mode = mode
+		m.activeItems()[20].details = "q? 猫.*"
+		m.activeItems()[25].details = "q? 猫.*"
+		m.cursor = 10
+		m.ensureCursorVisible()
+		cursor, offset := m.cursor, m.scrollOffset
+		m.queries[mode] = "old"
+		m, _ = press(m, "/")
+		for _, key := range []string{"q", "?", " ", "猫.*"} {
+			var cmd tea.Cmd
+			m, cmd = press(m, key)
+			if cmd != nil || m.showHelp || !m.searching {
+				t.Fatalf("search input %q invoked a command", key)
+			}
+		}
+		if m.queries[mode] != "q? 猫.*" || m.cursor != 20 {
+			t.Fatalf("literal search query=%q cursor=%d", m.queries[mode], m.cursor)
+		}
+		m, _ = press(m, "backspace")
+		if m.queries[mode] != "q? 猫." {
+			t.Fatal("backspace did not remove one rune")
+		}
+		m, _ = press(m, "backspace")
+		m, _ = press(m, "backspace")
+		if m.queries[mode] != "q? " {
+			t.Fatal("backspace corrupted Unicode")
+		}
+		for _, key := range []string{"tab", "up", "pgdown"} {
+			m, _ = press(m, key)
+			if m.mode != mode || m.cursor != 20 {
+				t.Fatal("navigation escaped search input")
+			}
+		}
+		m, _ = press(m, "esc")
+		if m.searching || m.cursor != cursor || m.scrollOffset != offset || m.queries[mode] != "old" {
+			t.Fatalf("cancellation did not restore state: %+v", m)
+		}
+		m, _ = press(m, "/")
+		_, cmd := press(m, "ctrl+c")
+		if cmd == nil {
+			t.Fatal("Ctrl+C did not quit during search")
+		}
+	}
+}
+
+func TestSearchBackspaceEncodings(t *testing.T) {
+	for _, key := range []struct {
+		name string
+		kind tea.KeyType
+	}{
+		{"BS", tea.KeyCtrlH},
+		{"DEL", tea.KeyBackspace},
+		{"Delete", tea.KeyDelete},
+	} {
+		t.Run(key.name, func(t *testing.T) {
+			m := listModel(4)
+			for i, name := range []string{"/origin", "a", "a猫", "a猫🙂"} {
+				m.activeItems()[i].name = name
+				m.activeItems()[i].details = ""
+			}
+			m, _ = press(m, "/")
+			m, _ = press(m, "a猫🙂")
+			if m.cursor != 3 {
+				t.Fatalf("initial search selected %d, want 3", m.cursor)
+			}
+			for _, step := range []struct {
+				query  string
+				cursor int
+			}{{"a猫", 2}, {"a", 1}, {"", 0}, {"", 0}} {
+				updated, cmd := m.Update(tea.KeyMsg{Type: key.kind})
+				m = updated.(Model)
+				if m.queries[m.mode] != step.query || m.cursor != step.cursor || !m.searching || cmd != nil {
+					t.Fatalf("query=%q cursor=%d searching=%v, want query=%q cursor=%d", m.queries[m.mode], m.cursor, m.searching, step.query, step.cursor)
+				}
+			}
+		})
+	}
+}
+
+func TestSearchEmptyNoMatchAndResize(t *testing.T) {
+	for _, count := range []int{0, 8} {
+		m := listModel(count)
+		m, _ = press(m, "/")
+		m, _ = press(m, "backspace")
+		m, _ = press(m, "enter")
+		for _, key := range []string{"n", "N", "/", "no such entity"} {
+			m, _ = press(m, key)
+		}
+		if !strings.Contains(m.renderFooter(), "No matches") || m.cursor != 0 {
+			t.Fatal("no-match search moved cursor or lacked status")
+		}
+		for _, size := range [][2]int{{1, 1}, {0, 0}, {40, 10}} {
+			updated, _ := m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+			m = updated.(Model)
+			assertViewport(t, m)
+		}
+		for range len([]rune("no such entity")) {
+			m, _ = press(m, "backspace")
+		}
+		if m.queries[m.mode] != "" || m.cursor != 0 {
+			t.Fatal("empty incremental search changed selection")
+		}
+		m, _ = press(m, "esc")
+		m, _ = press(m, "tab")
+		assertViewport(t, m)
+	}
+}
+
+func TestLongItemLineScrolling(t *testing.T) {
+	for _, mode := range []viewMode{viewEndpoints, viewComponents, viewWebhooks} {
+		m := listModel(1)
+		m.mode, m.height = mode, 10
+		m.activeItems()[0].details = strings.Repeat("detail\n", 50) + "FINAL DETAIL\n"
+		m, _ = press(m, "enter")
+		if strings.Contains(m.View(), "FINAL DETAIL") {
+			t.Fatal("fixture must overflow")
+		}
+		for range 20 {
+			m, _ = press(m, "pgdown")
+			assertViewport(t, m)
+		}
+		if !strings.Contains(m.View(), "FINAL DETAIL") || m.scrollOffset != m.totalLines()-m.contentHeight() {
+			t.Fatalf("last detail unreachable: offset=%d", m.scrollOffset)
+		}
+		bottom := m.scrollOffset
+		updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelUp})
+		m = updated.(Model)
+		if m.scrollOffset != bottom-3 {
+			t.Fatal("wheel up did not scroll lines")
+		}
+		updated, _ = m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown})
+		m = updated.(Model)
+		if m.scrollOffset != bottom {
+			t.Fatal("wheel down did not scroll lines")
+		}
+		for range 20 {
+			m, _ = press(m, "pgup")
+		}
+		if m.scrollOffset != 0 || !strings.Contains(m.View(), m.activeItems()[0].name) {
+			t.Fatal("page up did not reach header")
+		}
+		m, _ = press(m, "pgdown")
+		m, _ = press(m, "enter")
+		if m.scrollOffset != 0 || !m.activeItems()[0].folded {
+			t.Fatal("folding did not clamp scroll")
+		}
+	}
+}
+
+func TestProportionalScrollbar(t *testing.T) {
+	m := listModel(100)
+	m.width, m.height = 30, 14
+	for _, offset := range []int{0, 30, 90} {
+		m.scrollOffset = offset
+		top, size := m.scrollbar()
+		if size != 1 || top != offset*9/90 {
+			t.Fatalf("offset %d: thumb=%d size=%d", offset, top, size)
+		}
+		lines := strings.Split(strings.TrimSuffix(m.renderItems(), "\n"), "\n")
+		for i, line := range lines {
+			if lipgloss.Width(line) != m.width {
+				t.Fatalf("scrollbar not at right edge: %q", line)
+			}
+			if strings.HasSuffix(line, "█") != (i >= top && i < top+size) {
+				t.Fatalf("incorrect thumb on line %d: %q", i, line)
+			}
+		}
+		assertViewport(t, m)
+	}
+	m = listModel(20)
+	m.height = 14
+	if top, size := m.scrollbar(); top != 0 || size != 5 {
+		t.Fatalf("half-visible list: thumb=%d size=%d", top, size)
+	}
+	m.scrollOffset = 10
+	for _, size := range [][2]int{{1, 1}, {2, 5}, {40, 8}, {40, 40}, {0, 0}} {
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+		m = updated.(Model)
+		top, thumb := m.scrollbar()
+		if top < 0 || top+thumb > m.contentHeight() || m.scrollOffset > max(0, m.totalLines()-m.contentHeight()) {
+			t.Fatalf("resize %v: invalid scrollbar or offset", size)
+		}
+		assertViewport(t, m)
+	}
+	m = listModel(2)
+	if _, size := m.scrollbar(); size != 0 || strings.ContainsAny(m.renderItems(), "█│") {
+		t.Fatal("nonoverflowing list has a scrollbar")
 	}
 }

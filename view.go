@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -77,30 +78,49 @@ func (m Model) renderItem(entry item, selected bool) []string {
 	return lines
 }
 
+func (m Model) scrollbar() (int, int) {
+	height, total := m.contentHeight(), m.totalLines()
+	if total <= height {
+		return 0, 0
+	}
+	size := max(1, height*height/total)
+	offset := max(0, min(m.scrollOffset, total-height))
+	return offset * (height - size) / (total - height), size
+}
+
 func (m Model) renderItems() string {
 	height := m.contentHeight()
 	lines := make([]string, 0, height)
-	indicatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colorGray))
-	if m.scrollOffset > 0 && height > 1 {
-		lines = append(lines, indicatorStyle.Render("⬆ More items above..."))
+	thumb, size := m.scrollbar()
+	if size > 0 {
+		m.width = max(0, m.width-1)
 	}
-	entries := m.activeItems()
-	selectedLine := -1
-	for i := m.scrollOffset; i < len(entries); i++ {
-		if len(lines) >= height {
-			if selectedLine != height-1 {
-				lines[height-1] = indicatorStyle.Render("⬇ More items below...")
-			}
+	top := 0
+	for i, entry := range m.activeItems() {
+		itemHeight := m.getItemHeight(i)
+		if top+itemHeight > m.scrollOffset {
+			itemLines := m.renderItem(entry, i == m.cursor)
+			start := max(0, m.scrollOffset-top)
+			lines = append(lines, itemLines[start:min(len(itemLines), start+height-len(lines))]...)
+		}
+		top += itemHeight
+		if len(lines) == height {
 			break
 		}
-		if i == m.cursor {
-			selectedLine = len(lines)
-		}
-		itemLines := m.renderItem(entries[i], i == m.cursor)
-		lines = append(lines, itemLines[:min(len(itemLines), height-len(lines))]...)
 	}
 	for len(lines) < height {
 		lines = append(lines, "")
+	}
+	if size > 0 {
+		style := lipgloss.NewStyle().Foreground(lipgloss.Color(colorGray))
+		for i, line := range lines {
+			line = ansi.Truncate(line, m.width, "")
+			bar := "│"
+			if i >= thumb && i < thumb+size {
+				bar = "█"
+			}
+			lines[i] = line + strings.Repeat(" ", max(0, m.width-lipgloss.Width(line))) + style.Render(bar)
+		}
 	}
 	return strings.Join(lines, "\n") + "\n"
 }
@@ -129,6 +149,29 @@ func (m Model) renderHeader() string {
 
 func (m Model) renderFooter() string {
 	width := max(1, m.width)
+	if query := m.queries[m.mode]; m.searching || query != "" {
+		status := ""
+		if query != "" {
+			count, current := 0, 0
+			for i := range m.activeItems() {
+				if m.matches(i) {
+					count++
+					if i == m.cursor {
+						current = count
+					}
+				}
+			}
+			switch {
+			case count == 0:
+				status = "  No matches"
+			case current > 0:
+				status = fmt.Sprintf("  Match %d/%d", current, count)
+			default:
+				status = fmt.Sprintf("  %d matches", count)
+			}
+		}
+		return "\n" + ansi.Truncate("/"+singleLine(query)+status, width, "")
+	}
 	schemaInfo := ansi.Truncate(singleLine(m.title), max(0, width-2), "")
 	help := "Press '?' for help"
 	if m.showHelp || lipgloss.Width(help)+lipgloss.Width(schemaInfo)+4 > width {
@@ -143,18 +186,20 @@ func (m Model) renderFooter() string {
 func (m Model) renderHelpModal() string {
 	keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colorBlue)).Bold(true)
 	rows := [][2]string{
-		{"↑/k", "Move up"},
-		{"↓/j", "Move down"},
-		{"gg", "Move to the top"},
-		{"G", "Move to the bottom"},
-		{"Ctrl-U", "Scroll up by half a screen"},
-		{"Ctrl-D", "Scroll down by half a screen"},
+		{"↑/k, ↓/j", "Previous/next item"},
+		{"gg / G", "First/last item"},
+		{"Ctrl-U/D", "Move half a screen of items"},
+		{"PgUp/PgDn", "Scroll a screen of lines"},
+		{"Mouse wheel", "Scroll lines"},
 		{"Tab/L", "Cycle forward through views"},
 		{"Shift+Tab/H", "Cycle backward through views"},
 		{"Enter/Space", "Toggle details"},
+		{"/", "Incremental search (literal, ignore case)"},
+		{"Enter / Esc", "Accept/cancel search"},
+		{"n / N", "Next/previous match (wrap)"},
 		{"?", "Toggle help"},
 		{"Esc/q", "Close help"},
-		{"Ctrl+C", "Quit"},
+		{"q / Ctrl+C", "Quit (Ctrl+C also during search)"},
 	}
 	var lines []string
 	for _, row := range rows {

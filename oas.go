@@ -116,6 +116,12 @@ func formatOperationDetails(op *v3.Operation, inherited []*v3.Parameter) string 
 	if op.OperationId != "" {
 		fmt.Fprintf(&details, "Operation ID: %s\n", op.OperationId)
 	}
+	if len(op.Tags) > 0 {
+		fmt.Fprintf(&details, "Tags: %s\n", strings.Join(op.Tags, ", "))
+	}
+	if op.Deprecated != nil && *op.Deprecated {
+		details.WriteString("Deprecated: true\n")
+	}
 
 	parameters := slices.Clone(op.Parameters)
 	for _, parameter := range inherited {
@@ -130,6 +136,8 @@ func formatOperationDetails(op *v3.Operation, inherited []*v3.Parameter) string 
 		for _, parameter := range parameters {
 			if parameter != nil {
 				fmt.Fprintf(&details, "  - %s (%s): %s\n", parameter.Name, parameter.In, parameter.Description)
+				fmt.Fprintf(&details, "    Required: %t\n", parameter.Required != nil && *parameter.Required)
+				details.WriteString(indentDetails(formatTypedSchema(parameter.Schema)))
 			}
 		}
 	}
@@ -150,13 +158,22 @@ func formatOperationDetails(op *v3.Operation, inherited []*v3.Parameter) string 
 		for _, code := range codes {
 			if response := responses.Codes.GetOrZero(code); response != nil {
 				fmt.Fprintf(&details, "  - %s: %s\n", code, response.Description)
+				details.WriteString(indentDetails(formatResponseDetails(response)))
 			}
 		}
 		if responses.Default != nil {
 			fmt.Fprintf(&details, "  - default: %s\n", responses.Default.Description)
+			details.WriteString(indentDetails(formatResponseDetails(responses.Default)))
 		}
 	}
 	return details.String()
+}
+
+func indentDetails(text string) string {
+	if text == "" {
+		return ""
+	}
+	return "    " + strings.ReplaceAll(strings.TrimRight(text, "\n"), "\n", "\n    ") + "\n"
 }
 
 func formatContent(content *orderedmap.Map[string, *v3.MediaType]) string {
@@ -253,7 +270,15 @@ func formatResponseDetails(response *v3.Response) string {
 	if headers := sortedKeys(response.Headers); len(headers) > 0 {
 		details.WriteString("Headers:\n")
 		for _, name := range headers {
-			fmt.Fprintf(&details, "  - %s\n", name)
+			header := response.Headers.GetOrZero(name)
+			if header != nil {
+				fmt.Fprintf(&details, "  - %s", name)
+				if header.Description != "" {
+					fmt.Fprintf(&details, ": %s", header.Description)
+				}
+				details.WriteByte('\n')
+				details.WriteString(indentDetails(formatHeaderDetails(header)))
+			}
 		}
 	}
 	return details.String()

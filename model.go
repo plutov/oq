@@ -37,6 +37,11 @@ type Model struct {
 	showHelp     bool
 	lastKeyAt    time.Time
 	scrollOffset int
+	queries      [viewCount]string
+	searching    bool
+	searchCursor int
+	searchOffset int
+	searchQuery  string
 }
 
 func NewModel(doc *v3.Document) Model {
@@ -89,34 +94,90 @@ func (m Model) getItemHeight(index int) int {
 	return 2 + strings.Count(strings.TrimRight(entry.details, "\n"), "\n")
 }
 
+func (m Model) totalLines() int {
+	lines := 0
+	for i := range m.activeItems() {
+		lines += m.getItemHeight(i)
+	}
+	return lines
+}
+
+func (m *Model) clampScroll() {
+	m.scrollOffset = max(0, min(m.scrollOffset, m.totalLines()-m.contentHeight()))
+}
+
 func (m *Model) ensureCursorVisible() {
 	if len(m.activeItems()) == 0 {
 		m.cursor, m.scrollOffset = 0, 0
 		return
 	}
 	m.cursor = max(0, min(m.cursor, len(m.activeItems())-1))
-	m.scrollOffset = max(0, min(m.scrollOffset, m.cursor))
-	if m.cursor == 0 {
-		m.scrollOffset = 0
+	top := 0
+	for i := 0; i < m.cursor; i++ {
+		top += m.getItemHeight(i)
+	}
+	height := m.contentHeight()
+	bottom := top + m.getItemHeight(m.cursor)
+	if top < m.scrollOffset || m.getItemHeight(m.cursor) > height {
+		m.scrollOffset = top
+	} else if bottom > m.scrollOffset+height {
+		m.scrollOffset = bottom - height
+	}
+	m.clampScroll()
+}
+
+func (m *Model) scrollLines(delta int) {
+	m.scrollOffset += delta
+	m.clampScroll()
+}
+
+func (m Model) matches(index int) bool {
+	entry := m.activeItems()[index]
+	text := entry.name + "\n" + entry.kind + "\n" + entry.description + "\n" + entry.details
+	return strings.Contains(strings.ToLower(text), strings.ToLower(m.queries[m.mode]))
+}
+
+func (m *Model) findMatch(start, direction int) {
+	count := len(m.activeItems())
+	if m.queries[m.mode] == "" || count == 0 {
 		return
 	}
+	for step := 1; step <= count; step++ {
+		index := ((start+step*direction)%count + count) % count
+		if m.matches(index) {
+			m.cursor = index
+			m.ensureCursorVisible()
+			return
+		}
+	}
+}
 
-	height := m.contentHeight()
-	lines := min(m.getItemHeight(m.cursor), max(1, height-1))
-	for i := m.scrollOffset; i < m.cursor; i++ {
-		lines += m.getItemHeight(i)
-	}
-	for m.scrollOffset < m.cursor {
-		indicatorHeight := 0
-		if m.scrollOffset > 0 {
-			indicatorHeight = 1
+func (m *Model) updateSearch(msg tea.KeyMsg) {
+	switch msg.Type {
+	case tea.KeyEsc:
+		m.searching = false
+		m.cursor, m.scrollOffset = m.searchCursor, m.searchOffset
+		m.queries[m.mode] = m.searchQuery
+		m.clampScroll()
+		return
+	case tea.KeyEnter:
+		m.searching = false
+		return
+	case tea.KeyBackspace, tea.KeyCtrlH, tea.KeyDelete:
+		runes := []rune(m.queries[m.mode])
+		if len(runes) > 0 {
+			m.queries[m.mode] = string(runes[:len(runes)-1])
 		}
-		if lines+indicatorHeight <= height {
-			break
-		}
-		lines -= m.getItemHeight(m.scrollOffset)
-		m.scrollOffset++
+	case tea.KeyRunes:
+		m.queries[m.mode] += string(msg.Runes)
+	case tea.KeySpace:
+		m.queries[m.mode] += " "
+	default:
+		return
 	}
+	m.cursor, m.scrollOffset = m.searchCursor, m.searchOffset
+	m.clampScroll()
+	m.findMatch(m.searchCursor, 1)
 }
 
 func (m *Model) moveCursor(delta int) {
@@ -131,8 +192,25 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		top := 0
+		for i := 0; i < m.cursor; i++ {
+			top += m.getItemHeight(i)
+		}
+		selectedVisible := len(m.activeItems()) > 0 && top >= m.scrollOffset && top < m.scrollOffset+m.contentHeight()
 		m.width, m.height = max(1, msg.Width), max(1, msg.Height)
-		m.ensureCursorVisible()
+		m.clampScroll()
+		if selectedVisible && (top < m.scrollOffset || top >= m.scrollOffset+m.contentHeight()) {
+			m.ensureCursorVisible()
+		}
+	case tea.MouseMsg:
+		if !m.showHelp && !m.searching {
+			switch msg.Button {
+			case tea.MouseButtonWheelUp:
+				m.scrollLines(-3)
+			case tea.MouseButtonWheelDown:
+				m.scrollLines(3)
+			}
+		}
 	case tea.KeyMsg:
 		key := msg.String()
 		previousG := m.lastKeyAt
@@ -140,6 +218,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if key == "ctrl+c" {
 			return m, tea.Quit
+		}
+		if m.searching {
+			m.updateSearch(msg)
+			return m, nil
 		}
 		if key == "?" {
 			m.showHelp = !m.showHelp
@@ -155,6 +237,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key {
 		case "q":
 			return m, tea.Quit
+		case "/":
+			m.searching = true
+			m.searchCursor, m.searchOffset = m.cursor, m.scrollOffset
+			m.searchQuery, m.queries[m.mode] = m.queries[m.mode], ""
+		case "n":
+			m.findMatch(m.cursor, 1)
+		case "N":
+			m.findMatch(m.cursor, -1)
+		case "pgup":
+			m.scrollLines(-m.contentHeight())
+		case "pgdown":
+			m.scrollLines(m.contentHeight())
 		case "tab", "L":
 			m.cycleView(1)
 		case "shift+tab", "H":

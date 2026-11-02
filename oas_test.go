@@ -102,6 +102,7 @@ paths:
         description: inherited id
         schema:
           type: string
+          format: uuid
       - name: limit
         in: query
         description: inherited limit
@@ -111,12 +112,15 @@ paths:
       summary: Create pet
       operationId: createPet
       description: Creates a pet
+      tags: [pets, write]
+      deprecated: true
       parameters:
         - name: limit
           in: query
           description: operation limit
           schema:
             type: integer
+            format: int32
       requestBody:
         description: Pet payload
         required: true
@@ -132,10 +136,29 @@ paths:
           description: Failed
         '200':
           description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+          headers:
+            X-Count:
+              description: Result count
+              required: true
+              schema:
+                type: integer
+                format: int64
         2XX:
           description: Success
         default:
           description: Fallback
+          content:
+            text/plain:
+              schema:
+                type: string
+          headers:
+            Retry-After:
+              schema:
+                type: integer
     get:
       responses:
         '200':
@@ -235,6 +258,9 @@ func TestExtractOperations(t *testing.T) {
 	m := NewModel(doc)
 	var names []string
 	for _, entry := range m.items[viewEndpoints] {
+		if !entry.folded {
+			t.Fatal("endpoints must start collapsed")
+		}
 		names = append(names, entry.kind+" "+entry.name)
 	}
 	want := []string{"DELETE /a", "COPY /pets/{id}", "GET /pets/{id}", "POST /pets/{id}", "QUERY /pets/{id}"}
@@ -246,11 +272,23 @@ func TestExtractOperations(t *testing.T) {
 		"Summary: Create pet", "Description: Creates a pet", "Operation ID: createPet",
 		"id (path): inherited id", "limit (query): operation limit", "Required: true",
 		"application/json (schema: Pet)", "text/plain (types: [string null])",
-		"  - 200: Created\n  - 500: Failed\n  - 2XX: Success\n  - default: Fallback\n",
+		"Tags: pets, write", "Deprecated: true",
+		"limit (query): operation limit\n    Required: false\n    Type: integer\n    Format: int32\n",
+		"id (path): inherited id\n    Required: true\n    Type: string\n    Format: uuid\n",
+		"  - 200: Created\n    Content Types:\n      - application/json (schema: Pet)\n    Headers:\n      - X-Count: Result count\n        Required: true\n        Type: integer\n        Format: int64\n",
+		"  - default: Fallback\n    Content Types:\n      - text/plain (type: string)\n    Headers:\n      - Retry-After\n        Type: integer\n",
 	} {
 		if !strings.Contains(details, expected) {
 			t.Errorf("missing %q in %s", expected, details)
 		}
+	}
+	previous := -1
+	for _, code := range []string{"200: Created", "500: Failed", "2XX: Success", "default: Fallback"} {
+		position := strings.Index(details, "  - "+code)
+		if position <= previous {
+			t.Fatalf("response codes are missing or unordered: %s", details)
+		}
+		previous = position
 	}
 	if strings.Contains(details, "inherited limit") || strings.Count(details, "limit (query)") != 1 {
 		t.Error("operation parameters must override path parameters")
@@ -262,7 +300,7 @@ func TestExtractOperations(t *testing.T) {
 	if hook.kind != "POST" || hook.name != "petAdded" ||
 		!strings.Contains(hook.details, "Operation ID: petAdded") ||
 		!strings.Contains(hook.details, "application/json (schema: Pet)") ||
-		!strings.Contains(hook.details, "200: Accepted") {
+		!strings.Contains(hook.details, "200: Accepted") || !hook.folded {
 		t.Errorf("incomplete webhook: %+v", hook)
 	}
 }
@@ -281,7 +319,7 @@ func TestExtractComponents(t *testing.T) {
 		"Required: true\nType: integer\nFormat: int64\n",
 		"In: query\nRequired: true\nType: integer\nFormat: int32\nExample:",
 		"Required: true\nContent Types:\n  - application/json (schema: Pet)\n",
-		"Content Types:\n  - application/json (type: object)\nHeaders:\n  - A-Rate\n  - Z-Rate\n",
+		"Content Types:\n  - application/json (type: object)\nHeaders:\n  - A-Rate\n    Type: integer\n  - Z-Rate\n    Type: integer\n",
 		"Type: object\nRequired: [name]\nProperties:\n  - name: [string null]\n  - tags: array\n",
 		"Type: apiKey\nIn: header\nName: X-API-Key\n",
 		"Type: http\nScheme: bearer\nBearer Format: JWT\n",

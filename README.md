@@ -16,6 +16,29 @@ curl https://api.example.com/openapi.json | oq
 
 Press `?` to see the help screen with all available keyboard shortcuts.
 
+| Key | Action |
+| --- | --- |
+| `j`/`k`, `↓`/`↑` | Select next/previous item |
+| `gg` / `G` | Select first/last item |
+| `Ctrl-U` / `Ctrl-D` | Move up/down half a screen of items |
+| `Enter` / `Space` | Expand/collapse details (collapsed by default) |
+| `PgUp` / `PgDown`, mouse wheel | Scroll lines, including long expanded details |
+| `Tab` / `Shift-Tab`, `L` / `H` | Cycle forward/backward through views |
+| `/` | Start incremental, case-insensitive literal search |
+| `Enter` / `Esc` during search | Accept / cancel and restore the previous selection |
+| `n` / `N` | Next/previous match, wrapping at either end |
+| `q` / `Ctrl-C` | Quit (`Ctrl-C` also works during search) |
+
+Search covers names, kinds, descriptions and details in Requests, Components and
+Webhooks, even while details are collapsed. Each view remembers its accepted
+query. While typing a query, spaces, `q`, `?` and pasted Unicode text are input,
+not commands; Backspace edits the query. The footer shows match counts or
+`No matches`. Accept an empty search to clear it. Press `Esc` or `q` to close help.
+
+A proportional scrollbar on the right shows the visible portion of overflowing
+content. Line scrolling can move the selected item offscreen; item navigation
+brings it back into view.
+
 ## OpenAPI Support
 
 `oq` supports all 3.* OpenAPI specification versions:
@@ -24,7 +47,10 @@ Press `?` to see the help screen with all available keyboard shortcuts.
 - 3.1
 - 3.2
 
-Both JSON and YAML formats are supported.
+Both JSON and YAML formats are supported. Try `oq examples/catalog-3.2.yaml`
+for an OpenAPI 3.2 example with `QUERY`, `additionalOperations`, webhooks and
+schemas. Expanded operations show inherited parameters, required/type/format
+information, request and response content, response headers, tags and deprecation.
 
 Note: `oq` uses the [libopenapi](https://github.com/pb33f/libopenapi) library as it supports all OpenAPI versions and is actively maintained.
 
