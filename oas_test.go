@@ -1,453 +1,326 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
-	"github.com/pb33f/libopenapi"
-	"github.com/pb33f/libopenapi/datamodel"
+	v3 "github.com/pb33f/libopenapi/datamodel/high/v3"
+	"github.com/pb33f/libopenapi/orderedmap"
 )
 
-func TestAllExampleFiles(t *testing.T) {
-	examplesDir := "examples"
-
-	files, err := os.ReadDir(examplesDir)
-	if err != nil {
-		t.Fatalf("Failed to read examples directory: %v", err)
-	}
-
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-
-		filename := file.Name()
-		if !strings.HasSuffix(filename, ".yaml") &&
-			!strings.HasSuffix(filename, ".yml") &&
-			!strings.HasSuffix(filename, ".json") {
-			continue
-		}
-
-		t.Run(filename, func(t *testing.T) {
-			filepath := filepath.Join(examplesDir, filename)
-			testExampleFile(t, filepath)
-		})
-	}
-}
-
-func newDocumentFromFile(t *testing.T, specPath string) libopenapi.Document {
+func parseSpec(t *testing.T, spec string) *v3.Document {
 	t.Helper()
-	content, err := os.ReadFile(specPath)
+	doc, err := loadDocument(nil, strings.NewReader(spec))
 	if err != nil {
-		t.Fatalf("Failed to read file %s: %v", specPath, err)
+		t.Fatal(err)
 	}
-
-	absPath, err := filepath.Abs(specPath)
-	if err != nil {
-		t.Fatalf("Failed to get absolute path for %s: %v", specPath, err)
-	}
-
-	config := datamodel.NewDocumentConfiguration()
-	config.BasePath = filepath.Dir(absPath)
-	config.SpecFilePath = absPath
-	config.AllowFileReferences = true
-
-	document, err := libopenapi.NewDocumentWithConfiguration(content, config)
-	if err != nil {
-		t.Fatalf("Error creating document from %s: %v", specPath, err)
-	}
-	return document
+	return doc
 }
 
-func testExampleFile(t *testing.T, fp string) {
-	document := newDocumentFromFile(t, fp)
-
-	v3Model, err := document.BuildV3Model()
+func TestAllExampleFiles(t *testing.T) {
+	files, err := os.ReadDir("examples")
 	if err != nil {
-		t.Fatalf("Error building v3 model from %s: %v", fp, err)
+		t.Fatal(err)
 	}
-
-	if v3Model == nil {
-		t.Fatalf("V3 model is nil for %s", fp)
-	}
-
-	model := NewModel(&v3Model.Model)
-
-	if model.doc == nil {
-		t.Fatalf("Model document is nil for %s", fp)
-	}
-
-	endpoints := model.endpoints
-
-	for i, ep := range endpoints {
-		details := formatEndpointDetails(ep)
-		if details == "" {
-			t.Errorf("Empty endpoint details for endpoint %d (%s %s) in %s",
-				i, ep.method, ep.path, fp)
+	paths := []string{"examples/local-refs/openapi.yaml"}
+	for _, file := range files {
+		if !file.IsDir() {
+			paths = append(paths, filepath.Join("examples", file.Name()))
 		}
 	}
-
-	components := model.components
-
-	emptyDetailsCount := 0
-	for _, comp := range components {
-		if comp.details == "" {
-			emptyDetailsCount++
-		}
-	}
-
-	webhooks := model.webhooks
-
-	emptyWebhookCount := 0
-	for _, hook := range webhooks {
-		details := formatWebhookDetails(hook)
-		if details == "" {
-			emptyWebhookCount++
-		}
-	}
-
-	testModelRendering(t, &model, fp)
-}
-
-func testModelRendering(t *testing.T, model *Model, filepath string) {
-	model.width = 120
-	model.height = 40
-
-	model.mode = viewEndpoints
-	endpointsView := model.View()
-	if endpointsView == "" {
-		t.Errorf("Empty endpoints view for %s", filepath)
-	}
-
-	model.mode = viewComponents
-	componentsView := model.View()
-	if componentsView == "" {
-		t.Errorf("Empty components view for %s", filepath)
-	}
-
-	if len(model.webhooks) > 0 {
-		model.mode = viewWebhooks
-		webhooksView := model.View()
-		if webhooksView == "" {
-			t.Errorf("Empty webhooks view for %s", filepath)
-		}
-	}
-
-	model.showHelp = true
-	helpView := model.View()
-	if helpView == "" {
-		t.Errorf("Empty help view for %s", filepath)
-	}
-	model.showHelp = false
-
-	if len(model.endpoints) > 0 {
-		model.mode = viewEndpoints
-		model.cursor = 0
-
-		model.endpoints[0].folded = true
-		foldedView := model.View()
-		if foldedView == "" {
-			t.Errorf("Empty folded endpoints view for %s", filepath)
-		}
-
-		model.endpoints[0].folded = false
-		unfoldedView := model.View()
-		if unfoldedView == "" {
-			t.Errorf("Empty unfolded endpoints view for %s", filepath)
-		}
-	}
-
-	if len(model.components) > 0 {
-		model.mode = viewComponents
-		model.cursor = 0
-
-		model.components[0].folded = true
-		foldedView := model.View()
-		if foldedView == "" {
-			t.Errorf("Empty folded components view for %s", filepath)
-		}
-
-		model.components[0].folded = false
-		unfoldedView := model.View()
-		if unfoldedView == "" {
-			t.Errorf("Empty unfolded components view for %s", filepath)
-		}
-	}
-}
-
-func TestSpecificExampleFiles(t *testing.T) {
-	specificTests := []struct {
-		filename      string
-		minEndpoints  int
-		minComponents int
-	}{
-		{"petstore-3.0.yaml", 1, 1},
-		{"petstore-3.1.yaml", 1, 1},
-	}
-
-	for _, test := range specificTests {
-		t.Run(test.filename, func(t *testing.T) {
-			fp := filepath.Join("examples", test.filename)
-
-			if _, err := os.Stat(fp); os.IsNotExist(err) {
-				t.Skipf("File %s does not exist, skipping", fp)
-				return
-			}
-
-			document := newDocumentFromFile(t, fp)
-
-			v3Model, err := document.BuildV3Model()
+	for _, path := range paths {
+		t.Run(path, func(t *testing.T) {
+			doc, err := loadDocument([]string{path}, nil)
 			if err != nil {
-				t.Fatalf("Error building v3 model from %s: %v", fp, err)
+				t.Fatal(err)
 			}
-
-			model := NewModel(&v3Model.Model)
-
-			if len(model.endpoints) < test.minEndpoints {
-				t.Errorf("Expected at least %d endpoints in %s, got %d",
-					test.minEndpoints, test.filename, len(model.endpoints))
+			m := NewModel(doc)
+			if len(m.items[viewEndpoints]) == 0 {
+				t.Fatal("expected endpoints")
 			}
-
-			if len(model.components) < test.minComponents {
-				t.Errorf("Expected at least %d components in %s, got %d",
-					test.minComponents, test.filename, len(model.components))
+			for _, mode := range m.availableViews() {
+				m.mode = mode
+				for i := range m.activeItems() {
+					if !m.activeItems()[i].folded {
+						t.Fatal("items must start folded")
+					}
+				}
+				assertViewport(t, m)
+				if len(m.activeItems()) > 0 {
+					m.activeItems()[0].folded = false
+					assertViewport(t, m)
+				}
 			}
-
-			if model.doc.Info == nil {
-				t.Errorf("Document info is nil for %s", test.filename)
-			}
+			m.showHelp = true
+			assertViewport(t, m)
 		})
-	}
-}
-
-func TestModelNavigation(t *testing.T) {
-	fp := "examples/petstore-3.0.yaml"
-	if _, err := os.Stat(fp); os.IsNotExist(err) {
-		t.Skip("petstore-3.0.yaml not found, skipping navigation test")
-		return
-	}
-
-	document := newDocumentFromFile(t, fp)
-
-	v3Model, err := document.BuildV3Model()
-	if err != nil {
-		t.Fatalf("Error building v3 model: %v", err)
-	}
-
-	model := NewModel(&v3Model.Model)
-	model.width = 120
-	model.height = 40
-
-	initialCursor := model.cursor
-
-	if len(model.endpoints) > 1 {
-		model.cursor = 1
-		model.ensureCursorVisible()
-		if model.cursor != 1 {
-			t.Errorf("Cursor should be 1, got %d", model.cursor)
-		}
-	}
-
-	model.cursor = 0
-	model.ensureCursorVisible()
-	if model.cursor != 0 {
-		t.Errorf("Cursor should be 0, got %d", model.cursor)
-	}
-
-	originalMode := model.mode
-
-	model.mode = viewComponents
-	model.cursor = 0
-	componentsView := model.View()
-	if componentsView == "" {
-		t.Error("Components view should not be empty")
-	}
-
-	model.mode = originalMode
-	model.cursor = initialCursor
-	endpointsView := model.View()
-	if endpointsView == "" {
-		t.Error("Endpoints view should not be empty")
 	}
 }
 
 func TestPetstoreRequestBodySchemaDisplay(t *testing.T) {
-	fp := "examples/petstore-3.0.yaml"
-	if _, err := os.Stat(fp); os.IsNotExist(err) {
-		t.Skip("petstore-3.0.yaml not found, skipping test")
-		return
-	}
-
-	document := newDocumentFromFile(t, fp)
-
-	v3Model, err := document.BuildV3Model()
+	doc, err := loadDocument([]string{"examples/petstore-3.0.yaml"}, nil)
 	if err != nil {
-		t.Fatalf("Error building v3 model: %v", err)
+		t.Fatal(err)
 	}
-
-	model := NewModel(&v3Model.Model)
-
-	var addPetEndpoint *endpoint
-	for i := range model.endpoints {
-		if model.endpoints[i].path == "/pet" && model.endpoints[i].method == "POST" {
-			addPetEndpoint = &model.endpoints[i]
-			break
-		}
+	entries := NewModel(doc).items[viewEndpoints]
+	index := slices.IndexFunc(entries, func(entry item) bool {
+		return entry.name == "/pet" && entry.kind == "POST"
+	})
+	if index < 0 {
+		t.Fatal("missing POST /pet")
 	}
-
-	if addPetEndpoint == nil {
-		t.Fatal("Could not find POST /pet endpoint")
-	}
-
-	details := formatEndpointDetails(*addPetEndpoint)
-
-	// Verify request body shows description
-	if !strings.Contains(details, "Create a new pet in the store") {
-		t.Error("Request body description not displayed")
-	}
-
-	// Verify required status is shown
-	if !strings.Contains(details, "Required: true") {
-		t.Error("Request body required status not displayed")
-	}
-
-	// Verify schema references are shown for all media types
-	expectedSchemas := []string{
-		"application/json (schema: Pet)",
-		"application/xml (schema: Pet)",
+	details := entries[index].details
+	for _, expected := range []string{
+		"Create a new pet in the store", "Required: true",
+		"application/json (schema: Pet)", "application/xml (schema: Pet)",
 		"application/x-www-form-urlencoded (schema: Pet)",
-	}
-
-	for _, expected := range expectedSchemas {
+	} {
 		if !strings.Contains(details, expected) {
-			t.Errorf("Expected schema reference not found: %s", expected)
+			t.Errorf("missing %q in %s", expected, details)
 		}
 	}
-	// Verify media types are sorted alphabetically
-	jsonIdx := strings.Index(details, "application/json")
-	xmlIdx := strings.Index(details, "application/xml")
-	formIdx := strings.Index(details, "application/x-www-form-urlencoded")
-
-	if jsonIdx == -1 || xmlIdx == -1 || formIdx == -1 {
-		t.Fatal("Not all media types found in output")
-	}
-
-	if !(jsonIdx < formIdx && formIdx < xmlIdx) {
-		t.Error("Media types are not sorted alphabetically")
-	}
-}
-func TestLocalReferences(t *testing.T) {
-	fp := "examples/local-refs/openapi.yaml"
-	if _, err := os.Stat(fp); os.IsNotExist(err) {
-		t.Skip("local-refs example not found, skipping")
-		return
-	}
-
-	document := newDocumentFromFile(t, fp)
-
-	v3Model, err := document.BuildV3Model()
-	if err != nil {
-		t.Fatalf("Error building v3 model: %v", err)
-	}
-
-	model := NewModel(&v3Model.Model)
-
-	if len(model.endpoints) == 0 {
-		t.Error("Expected at least one endpoint from local-refs spec")
-	}
-
-	if len(model.components) == 0 {
-		t.Error("Expected at least one component from local-refs spec")
-	}
-
-	model.width = 120
-	model.height = 40
-	testModelRendering(t, &model, fp)
-}
-
-func TestFooterRenderNarrowWidth(t *testing.T) {
-	// Regression: renderFooter computed a padding count of
-	// m.width - len(helpText) - len(schemaInfo) - 2 and passed it to
-	// strings.Repeat without clamping. A long info.title/version or a narrow
-	// terminal made the count negative and strings.Repeat panicked
-	// ("strings: negative Repeat count"), crashing the whole TUI.
-	longTitleSpec := `{
-		"openapi": "3.0.3",
-		"info": {
-			"title": "A Very Long OpenAPI Specification Title That Easily Exceeds Any Reasonable Terminal Width",
-			"version": "1.2.3-rc.1+build.456"
-		},
-		"paths": {}
-	}`
-
-	document, err := libopenapi.NewDocument([]byte(longTitleSpec))
-	if err != nil {
-		t.Fatalf("Error creating document: %v", err)
-	}
-
-	v3Model, err := document.BuildV3Model()
-	if err != nil {
-		t.Fatalf("Error building v3 model: %v", err)
-	}
-
-	model := NewModel(&v3Model.Model)
-
-	// Widths small enough that title+version overflow the footer, plus the
-	// zero-width edge case. Pre-fix, each of these panicked.
-	for _, width := range []int{0, 1, 10, 40} {
-		t.Run(fmt.Sprintf("width=%d", width), func(t *testing.T) {
-			model.width = width
-			model.height = 24
-
-			// renderFooter is reached through View(); call both so a
-			// regression in either path is caught.
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						t.Fatalf("renderFooter panicked at width %d: %v", width, r)
-					}
-				}()
-				_ = model.renderFooter()
-				_ = model.View()
-			}()
-		})
+	if !(strings.Index(details, "application/json") < strings.Index(details, "application/x-www-form-urlencoded") &&
+		strings.Index(details, "application/x-www-form-urlencoded") < strings.Index(details, "application/xml")) {
+		t.Error("media types are not sorted")
 	}
 }
 
-func TestEmptyDocument(t *testing.T) {
-	minimalSpec := `{
-		"openapi": "3.0.3",
-		"info": {
-			"title": "Minimal API",
-			"version": "1.0.0"
-		},
-		"paths": {}
-	}`
+const operationSpec = `openapi: 3.2.0
+info:
+  title: Test API
+  version: 1.0.0
+paths:
+  /pets/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: inherited id
+        schema:
+          type: string
+      - name: limit
+        in: query
+        description: inherited limit
+        schema:
+          type: integer
+    post:
+      summary: Create pet
+      operationId: createPet
+      description: Creates a pet
+      parameters:
+        - name: limit
+          in: query
+          description: operation limit
+          schema:
+            type: integer
+      requestBody:
+        description: Pet payload
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: [string, 'null']
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pet'
+      responses:
+        '500':
+          description: Failed
+        '200':
+          description: Created
+        2XX:
+          description: Success
+        default:
+          description: Fallback
+    get:
+      responses:
+        '200':
+          description: Retrieved
+    query:
+      responses:
+        '200':
+          description: Queried
+    additionalOperations:
+      COPY:
+        responses:
+          '200':
+            description: Copied
+  /a:
+    delete:
+      responses:
+        '204':
+          description: Deleted
+webhooks:
+  petAdded:
+    post:
+      operationId: petAdded
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pet'
+      responses:
+        '200':
+          description: Accepted
+components:
+  schemas:
+    Pet:
+      description: A pet
+      type: object
+      required: [name]
+      properties:
+        tags:
+          type: array
+          items:
+            type: string
+        name:
+          type: [string, 'null']
+  requestBodies:
+    PetBody:
+      description: Body description
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Pet'
+  responses:
+    PetResponse:
+      description: Response description
+      content:
+        application/json:
+          schema:
+            type: object
+      headers:
+        Z-Rate:
+          schema:
+            type: integer
+        A-Rate:
+          schema:
+            type: integer
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      description: Parameter description
+      required: true
+      schema:
+        type: integer
+        format: int32
+      example: 10
+  headers:
+    Rate:
+      description: Header description
+      required: true
+      schema:
+        type: integer
+        format: int64
+  securitySchemes:
+    Bearer:
+      description: Security description
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+`
 
-	document, err := libopenapi.NewDocument([]byte(minimalSpec))
-	if err != nil {
-		t.Fatalf("Error creating minimal document: %v", err)
+func TestExtractOperations(t *testing.T) {
+	doc := parseSpec(t, operationSpec)
+	m := NewModel(doc)
+	var names []string
+	for _, entry := range m.items[viewEndpoints] {
+		names = append(names, entry.kind+" "+entry.name)
 	}
-
-	v3Model, err := document.BuildV3Model()
-	if err != nil {
-		t.Fatalf("Error building v3 model for minimal spec: %v", err)
+	want := []string{"DELETE /a", "COPY /pets/{id}", "GET /pets/{id}", "POST /pets/{id}", "QUERY /pets/{id}"}
+	if !reflect.DeepEqual(names, want) {
+		t.Fatalf("operations = %v, want %v", names, want)
 	}
-
-	model := NewModel(&v3Model.Model)
-	model.width = 80
-	model.height = 24
-
-	view := model.View()
-	if view == "" {
-		t.Error("View should not be empty even for minimal document")
+	details := m.items[viewEndpoints][3].details
+	for _, expected := range []string{
+		"Summary: Create pet", "Description: Creates a pet", "Operation ID: createPet",
+		"id (path): inherited id", "limit (query): operation limit", "Required: true",
+		"application/json (schema: Pet)", "text/plain (types: [string null])",
+		"  - 200: Created\n  - 500: Failed\n  - 2XX: Success\n  - default: Fallback\n",
+	} {
+		if !strings.Contains(details, expected) {
+			t.Errorf("missing %q in %s", expected, details)
+		}
 	}
+	if strings.Contains(details, "inherited limit") || strings.Count(details, "limit (query)") != 1 {
+		t.Error("operation parameters must override path parameters")
+	}
+	if len(m.items[viewWebhooks]) != 1 {
+		t.Fatalf("webhooks = %v", m.items[viewWebhooks])
+	}
+	hook := m.items[viewWebhooks][0]
+	if hook.kind != "POST" || hook.name != "petAdded" ||
+		!strings.Contains(hook.details, "Operation ID: petAdded") ||
+		!strings.Contains(hook.details, "application/json (schema: Pet)") ||
+		!strings.Contains(hook.details, "200: Accepted") {
+		t.Errorf("incomplete webhook: %+v", hook)
+	}
+}
 
-	model.ensureCursorVisible()
-	if model.cursor != 0 {
-		t.Errorf("Cursor should remain 0 for empty document, got %d", model.cursor)
+func TestExtractComponents(t *testing.T) {
+	entries := extractComponents(parseSpec(t, operationSpec))
+	wantKinds := []string{"Header", "Parameter", "RequestBody", "Response", "Schema", "SecurityScheme", "SecurityScheme"}
+	var kinds []string
+	for _, entry := range entries {
+		kinds = append(kinds, entry.kind)
+	}
+	if !reflect.DeepEqual(kinds, wantKinds) {
+		t.Fatalf("kinds = %v", kinds)
+	}
+	wantDetails := []string{
+		"Required: true\nType: integer\nFormat: int64\n",
+		"In: query\nRequired: true\nType: integer\nFormat: int32\nExample:",
+		"Required: true\nContent Types:\n  - application/json (schema: Pet)\n",
+		"Content Types:\n  - application/json (type: object)\nHeaders:\n  - A-Rate\n  - Z-Rate\n",
+		"Type: object\nRequired: [name]\nProperties:\n  - name: [string null]\n  - tags: array\n",
+		"Type: apiKey\nIn: header\nName: X-API-Key\n",
+		"Type: http\nScheme: bearer\nBearer Format: JWT\n",
+	}
+	for i, want := range wantDetails {
+		if !strings.HasPrefix(entries[i].details, want) {
+			t.Errorf("%s details = %q, want %q", entries[i].kind, entries[i].details, want)
+		}
+		if !entries[i].folded {
+			t.Error("components must start folded")
+		}
+	}
+	if entries[4].description != "A pet" || entries[0].description != "Header description" {
+		t.Error("component descriptions lost")
+	}
+}
+
+func TestSortResponseCodes(t *testing.T) {
+	codes := []string{"default", "500", "2XX", "20", "200", "100", "4XX"}
+	sortResponseCodes(codes)
+	want := []string{"20", "100", "200", "500", "2XX", "4XX", "default"}
+	if !reflect.DeepEqual(codes, want) {
+		t.Errorf("codes = %v, want %v", codes, want)
+	}
+}
+
+func TestMissingDetails(t *testing.T) {
+	for _, details := range []string{
+		formatSchemaDetails(nil), formatRequestBodyDetails(nil), formatResponseDetails(nil),
+		formatParameterDetails(nil), formatHeaderDetails(nil), formatSecuritySchemeDetails(nil),
+	} {
+		if !strings.HasPrefix(details, "No ") {
+			t.Errorf("unexpected fallback: %q", details)
+		}
+	}
+	paths := orderedmap.New[string, *v3.PathItem]()
+	paths.Set("/nil", nil)
+	paths.Set("/empty", &v3.PathItem{})
+	if len(extractOperations(paths)) != 0 || len(extractOperations(nil)) != 0 {
+		t.Error("empty paths must produce no operations")
 	}
 }

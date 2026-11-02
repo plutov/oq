@@ -7,13 +7,22 @@ jobs:
     name: Tests
     runs-on: ubuntu-latest
     steps:
-      - name: install go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.25
-
       - name: checkout
         uses: actions/checkout@v4
 
+      - name: install go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: formatting
+        run: test -z "$(gofmt -l .)"
+
+      - name: vet
+        run: go vet ./...
+
       - name: tests
-        run: go test -race -v .
+        run: go test -race -cover ./...
+
+      - name: build
+        run: go build ./...

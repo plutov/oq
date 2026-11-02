@@ -1,613 +1,317 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/pb33f/libopenapi/datamodel/high/base"
 	v3 "github.com/pb33f/libopenapi/datamodel/high/v3"
+	"github.com/pb33f/libopenapi/orderedmap"
 )
 
-// sortResponseCodes sorts HTTP response codes with stable ordering:
-// 1. Numeric codes sorted numerically (100, 200, 201, 400, 404, 500)
-// 2. Non-numeric codes sorted alphabetically (default)
+func sortedKeys[T any](entries *orderedmap.Map[string, T]) []string {
+	keys := slices.Collect(entries.KeysFromOldest())
+	slices.Sort(keys)
+	return keys
+}
+
 func sortResponseCodes(codes []string) {
-	sort.Slice(codes, func(i, j int) bool {
-		codeI, errI := strconv.Atoi(codes[i])
-		codeJ, errJ := strconv.Atoi(codes[j])
-
-		// Both are numeric - sort numerically
-		if errI == nil && errJ == nil {
-			return codeI < codeJ
+	slices.SortFunc(codes, func(a, b string) int {
+		x, errX := strconv.Atoi(a)
+		y, errY := strconv.Atoi(b)
+		switch {
+		case errX == nil && errY == nil:
+			return cmp.Or(cmp.Compare(x, y), strings.Compare(a, b))
+		case errX == nil:
+			return -1
+		case errY == nil:
+			return 1
+		default:
+			return strings.Compare(a, b)
 		}
-
-		// One numeric, one non-numeric - numeric comes first
-		if errI == nil && errJ != nil {
-			return true
-		}
-		if errI != nil && errJ == nil {
-			return false
-		}
-
-		// Both non-numeric - sort alphabetically
-		return codes[i] < codes[j]
 	})
 }
 
-func extractEndpoints(doc *v3.Document) []endpoint {
-	var endpoints []endpoint
-
-	if doc.Paths == nil || doc.Paths.PathItems == nil {
-		return endpoints
-	}
-
-	// Iterate through path items using the orderedmap methods
-	for pair := doc.Paths.PathItems.First(); pair != nil; pair = pair.Next() {
-		path := pair.Key()
-		pathItem := pair.Value()
-
-		if pathItem.Get != nil {
-			endpoints = append(endpoints, endpoint{path: path, method: "GET", op: pathItem.Get, folded: true})
+func extractOperations(paths *orderedmap.Map[string, *v3.PathItem]) []item {
+	var items []item
+	for name, path := range paths.FromOldest() {
+		if path == nil {
+			continue
 		}
-		if pathItem.Post != nil {
-			endpoints = append(endpoints, endpoint{path: path, method: "POST", op: pathItem.Post, folded: true})
-		}
-		if pathItem.Put != nil {
-			endpoints = append(endpoints, endpoint{path: path, method: "PUT", op: pathItem.Put, folded: true})
-		}
-		if pathItem.Delete != nil {
-			endpoints = append(endpoints, endpoint{path: path, method: "DELETE", op: pathItem.Delete, folded: true})
-		}
-		if pathItem.Patch != nil {
-			endpoints = append(endpoints, endpoint{path: path, method: "PATCH", op: pathItem.Patch, folded: true})
-		}
-		if pathItem.Head != nil {
-			endpoints = append(endpoints, endpoint{path: path, method: "HEAD", op: pathItem.Head, folded: true})
-		}
-		if pathItem.Options != nil {
-			endpoints = append(endpoints, endpoint{path: path, method: "OPTIONS", op: pathItem.Options, folded: true})
-		}
-		if pathItem.Trace != nil {
-			endpoints = append(endpoints, endpoint{path: path, method: "TRACE", op: pathItem.Trace, folded: true})
-		}
-	}
-
-	// Sort endpoints for stable ordering: first by path, then by method
-	sort.Slice(endpoints, func(i, j int) bool {
-		if endpoints[i].path != endpoints[j].path {
-			return endpoints[i].path < endpoints[j].path
-		}
-		return endpoints[i].method < endpoints[j].method
-	})
-
-	return endpoints
-}
-
-func extractWebhooks(doc *v3.Document) []webhook {
-	var webhooks []webhook
-
-	if doc.Webhooks != nil {
-		for pair := doc.Webhooks.First(); pair != nil; pair = pair.Next() {
-			name := pair.Key()
-			hook := pair.Value()
-			if hook != nil {
-				if hook.Get != nil {
-					webhooks = append(webhooks, webhook{name: name, method: "GET", op: hook.Get, folded: true})
-				}
-				if hook.Post != nil {
-					webhooks = append(webhooks, webhook{name: name, method: "POST", op: hook.Post, folded: true})
-				}
-				if hook.Put != nil {
-					webhooks = append(webhooks, webhook{name: name, method: "PUT", op: hook.Put, folded: true})
-				}
-				if hook.Delete != nil {
-					webhooks = append(webhooks, webhook{name: name, method: "DELETE", op: hook.Delete, folded: true})
-				}
-				if hook.Patch != nil {
-					webhooks = append(webhooks, webhook{name: name, method: "PATCH", op: hook.Patch, folded: true})
-				}
-				if hook.Head != nil {
-					webhooks = append(webhooks, webhook{name: name, method: "HEAD", op: hook.Head, folded: true})
-				}
-				if hook.Options != nil {
-					webhooks = append(webhooks, webhook{name: name, method: "OPTIONS", op: hook.Options, folded: true})
-				}
-				if hook.Trace != nil {
-					webhooks = append(webhooks, webhook{name: name, method: "TRACE", op: hook.Trace, folded: true})
-				}
-			}
-		}
-	}
-
-	// Sort webhooks for stable ordering: first by name, then by method
-	sort.Slice(webhooks, func(i, j int) bool {
-		if webhooks[i].name != webhooks[j].name {
-			return webhooks[i].name < webhooks[j].name
-		}
-		return webhooks[i].method < webhooks[j].method
-	})
-
-	return webhooks
-}
-
-func extractComponents(doc *v3.Document) []component {
-	var components []component
-
-	if doc.Components != nil {
-		if doc.Components.Schemas != nil {
-			for pair := doc.Components.Schemas.First(); pair != nil; pair = pair.Next() {
-				name := pair.Key()
-				schema := pair.Value()
-				details := formatSchemaDetails(schema)
-				description := ""
-				if schema != nil && schema.Schema() != nil && schema.Schema().Description != "" {
-					description = schema.Schema().Description
-				}
-				components = append(components, component{
-					name:        name,
-					compType:    "Schema",
-					description: description,
-					details:     details,
-					folded:      true,
-				})
-			}
-		}
-		if doc.Components.RequestBodies != nil {
-			for pair := doc.Components.RequestBodies.First(); pair != nil; pair = pair.Next() {
-				name := pair.Key()
-				reqBody := pair.Value()
-				details := formatRequestBodyDetails(reqBody)
-				description := ""
-				if reqBody != nil && reqBody.Description != "" {
-					description = reqBody.Description
-				}
-				components = append(components, component{
-					name:        name,
-					compType:    "RequestBody",
-					description: description,
-					details:     details,
-					folded:      true,
-				})
-			}
-		}
-		if doc.Components.Responses != nil {
-			for pair := doc.Components.Responses.First(); pair != nil; pair = pair.Next() {
-				name := pair.Key()
-				resp := pair.Value()
-				details := formatResponseDetails(resp)
-				description := ""
-				if resp != nil && resp.Description != "" {
-					description = resp.Description
-				}
-				components = append(components, component{
-					name:        name,
-					compType:    "Response",
-					description: description,
-					details:     details,
-					folded:      true,
-				})
-			}
-		}
-		if doc.Components.Parameters != nil {
-			for pair := doc.Components.Parameters.First(); pair != nil; pair = pair.Next() {
-				name := pair.Key()
-				param := pair.Value()
-				details := formatParameterDetails(param)
-				description := ""
-				if param != nil && param.Description != "" {
-					description = param.Description
-				}
-				components = append(components, component{
-					name:        name,
-					compType:    "Parameter",
-					description: description,
-					details:     details,
-					folded:      true,
-				})
-			}
-		}
-		if doc.Components.Headers != nil {
-			for pair := doc.Components.Headers.First(); pair != nil; pair = pair.Next() {
-				name := pair.Key()
-				header := pair.Value()
-				details := formatHeaderDetails(header)
-				description := ""
-				if header != nil && header.Description != "" {
-					description = header.Description
-				}
-				components = append(components, component{
-					name:        name,
-					compType:    "Header",
-					description: description,
-					details:     details,
-					folded:      true,
-				})
-			}
-		}
-		if doc.Components.SecuritySchemes != nil {
-			for pair := doc.Components.SecuritySchemes.First(); pair != nil; pair = pair.Next() {
-				name := pair.Key()
-				secScheme := pair.Value()
-				details := formatSecuritySchemeDetails(name, secScheme)
-				description := ""
-				if secScheme != nil && secScheme.Description != "" {
-					description = secScheme.Description
-				}
-				components = append(components, component{
-					name:        name,
-					compType:    "SecurityScheme",
-					description: description,
-					details:     details,
-					folded:      true,
+		for method, op := range path.GetOperations().FromOldest() {
+			if op != nil {
+				items = append(items, item{
+					name: name, kind: strings.ToUpper(method),
+					details: formatOperationDetails(op, path.Parameters), folded: true,
 				})
 			}
 		}
 	}
-
-	// Sort components for stable ordering: first by type, then by name
-	sort.Slice(components, func(i, j int) bool {
-		if components[i].compType != components[j].compType {
-			return components[i].compType < components[j].compType
-		}
-		return components[i].name < components[j].name
+	slices.SortFunc(items, func(a, b item) int {
+		return cmp.Or(strings.Compare(a.name, b.name), strings.Compare(a.kind, b.kind))
 	})
-
-	return components
+	return items
 }
 
-func formatEndpointDetails(ep endpoint) string {
+func extractComponents(doc *v3.Document) []item {
+	var items []item
+	if doc.Components == nil {
+		return items
+	}
+	add := func(name, kind, description, details string) {
+		items = append(items, item{
+			name: name, kind: kind, description: description, details: details, folded: true,
+		})
+	}
+	components := doc.Components
+	for name, proxy := range components.Schemas.FromOldest() {
+		description := ""
+		if proxy != nil && proxy.Schema() != nil {
+			description = proxy.Schema().Description
+		}
+		add(name, "Schema", description, formatSchemaDetails(proxy))
+	}
+	for name, body := range components.RequestBodies.FromOldest() {
+		if body != nil {
+			add(name, "RequestBody", body.Description, formatRequestBodyDetails(body))
+		}
+	}
+	for name, response := range components.Responses.FromOldest() {
+		if response != nil {
+			add(name, "Response", response.Description, formatResponseDetails(response))
+		}
+	}
+	for name, parameter := range components.Parameters.FromOldest() {
+		if parameter != nil {
+			add(name, "Parameter", parameter.Description, formatParameterDetails(parameter))
+		}
+	}
+	for name, header := range components.Headers.FromOldest() {
+		if header != nil {
+			add(name, "Header", header.Description, formatHeaderDetails(header))
+		}
+	}
+	for name, scheme := range components.SecuritySchemes.FromOldest() {
+		if scheme != nil {
+			add(name, "SecurityScheme", scheme.Description, formatSecuritySchemeDetails(scheme))
+		}
+	}
+	slices.SortFunc(items, func(a, b item) int {
+		return cmp.Or(strings.Compare(a.kind, b.kind), strings.Compare(a.name, b.name))
+	})
+	return items
+}
+
+func formatOperationDetails(op *v3.Operation, inherited []*v3.Parameter) string {
 	var details strings.Builder
-
-	if ep.op.Summary != "" {
-		details.WriteString(fmt.Sprintf("Summary: %s\n", ep.op.Summary))
+	if op.Summary != "" {
+		fmt.Fprintf(&details, "Summary: %s\n", op.Summary)
+	}
+	if op.Description != "" {
+		fmt.Fprintf(&details, "Description: %s\n", op.Description)
+	}
+	if op.OperationId != "" {
+		fmt.Fprintf(&details, "Operation ID: %s\n", op.OperationId)
 	}
 
-	if ep.op.Description != "" {
-		details.WriteString(fmt.Sprintf("Description: %s\n", ep.op.Description))
+	parameters := slices.Clone(op.Parameters)
+	for _, parameter := range inherited {
+		if parameter != nil && !slices.ContainsFunc(op.Parameters, func(p *v3.Parameter) bool {
+			return p != nil && p.Name == parameter.Name && p.In == parameter.In
+		}) {
+			parameters = append(parameters, parameter)
+		}
 	}
-
-	if len(ep.op.Parameters) > 0 {
+	if len(parameters) > 0 {
 		details.WriteString("Parameters:\n")
-		for _, param := range ep.op.Parameters {
-			if param != nil {
-				details.WriteString(fmt.Sprintf("  - %s (%s): %s\n",
-					param.Name, param.In, param.Description))
+		for _, parameter := range parameters {
+			if parameter != nil {
+				fmt.Fprintf(&details, "  - %s (%s): %s\n", parameter.Name, parameter.In, parameter.Description)
 			}
 		}
 	}
-
-	if ep.op.RequestBody != nil {
+	if body := op.RequestBody; body != nil {
 		details.WriteString("Request Body:\n")
-
-		if ep.op.RequestBody.Description != "" {
-			details.WriteString(fmt.Sprintf("  Description: %s\n", ep.op.RequestBody.Description))
+		if body.Description != "" {
+			fmt.Fprintf(&details, "  Description: %s\n", body.Description)
 		}
-
-		if ep.op.RequestBody.Required != nil && *ep.op.RequestBody.Required {
+		if body.Required != nil && *body.Required {
 			details.WriteString("  Required: true\n")
 		}
-
-		// Get media types and sort them for stable ordering
-		var mediaTypes []string
-		if ep.op.RequestBody.Content != nil {
-			for pair := ep.op.RequestBody.Content.First(); pair != nil; pair = pair.Next() {
-				mediaTypes = append(mediaTypes, pair.Key())
-			}
-		}
-		sort.Strings(mediaTypes)
-
-		// Display media type with schema information - either a reference to a component schema
-		// (e.g., "#/components/schemas/Pet") or an inline schema type (e.g., "object", "string")
-		for _, mediaType := range mediaTypes {
-			if mediaTypeObj, ok := ep.op.RequestBody.Content.Get(mediaType); ok && mediaTypeObj != nil {
-				details.WriteString(fmt.Sprintf("  - %s", mediaType))
-				if mediaTypeObj.Schema != nil {
-					// Check if it's a reference first
-					if mediaTypeObj.Schema.GetReference() != "" {
-						ref := mediaTypeObj.Schema.GetReference()
-						// Extract just the schema name from the reference path
-						parts := strings.Split(ref, "/")
-						if len(parts) > 0 {
-							schemaName := parts[len(parts)-1]
-							details.WriteString(fmt.Sprintf(" (schema: %s)", schemaName))
-						}
-					} else if mediaTypeObj.Schema.Schema() != nil && len(mediaTypeObj.Schema.Schema().Type) > 0 {
-						// If it's an inline schema with a type
-						types := mediaTypeObj.Schema.Schema().Type
-						if len(types) == 1 {
-							details.WriteString(fmt.Sprintf(" (type: %s)", types[0]))
-						} else {
-							details.WriteString(fmt.Sprintf(" (types: %v)", types))
-						}
-					}
-				}
-				details.WriteString("\n")
-			}
-		}
+		details.WriteString(formatContent(body.Content))
 	}
-
-	if ep.op.Responses != nil {
+	if responses := op.Responses; responses != nil {
 		details.WriteString("Responses:\n")
-
-		// Get response codes and sort them for stable ordering
-		var codes []string
-		if ep.op.Responses.Codes != nil {
-			for pair := ep.op.Responses.Codes.First(); pair != nil; pair = pair.Next() {
-				codes = append(codes, pair.Key())
+		codes := sortedKeys(responses.Codes)
+		sortResponseCodes(codes)
+		for _, code := range codes {
+			if response := responses.Codes.GetOrZero(code); response != nil {
+				fmt.Fprintf(&details, "  - %s: %s\n", code, response.Description)
 			}
 		}
-
-		// Sort by status code numerically, then alphabetically for non-numeric codes
-		sortResponseCodes(codes)
-
-		for _, code := range codes {
-			if resp, ok := ep.op.Responses.Codes.Get(code); ok && resp != nil {
-				if resp.Description != "" {
-					details.WriteString(fmt.Sprintf("  - %s: %s\n", code, resp.Description))
-				}
-			}
+		if responses.Default != nil {
+			fmt.Fprintf(&details, "  - default: %s\n", responses.Default.Description)
 		}
 	}
-
 	return details.String()
 }
 
-func formatSchemaDetails(schema *base.SchemaProxy) string {
+func formatContent(content *orderedmap.Map[string, *v3.MediaType]) string {
 	var details strings.Builder
+	for _, mediaType := range sortedKeys(content) {
+		media := content.GetOrZero(mediaType)
+		if media == nil {
+			continue
+		}
+		fmt.Fprintf(&details, "  - %s", mediaType)
+		if proxy := media.Schema; proxy != nil {
+			if ref := proxy.GetReference(); ref != "" {
+				parts := strings.Split(ref, "/")
+				fmt.Fprintf(&details, " (schema: %s)", parts[len(parts)-1])
+			} else if schema := proxy.Schema(); schema != nil && len(schema.Type) > 0 {
+				if len(schema.Type) == 1 {
+					fmt.Fprintf(&details, " (type: %s)", schema.Type[0])
+				} else {
+					fmt.Fprintf(&details, " (types: %v)", schema.Type)
+				}
+			}
+		}
+		details.WriteByte('\n')
+	}
+	return details.String()
+}
 
-	if schema == nil || schema.Schema() == nil {
+func writeSchemaType(details *strings.Builder, label string, types []string) {
+	switch len(types) {
+	case 0:
+	case 1:
+		fmt.Fprintf(details, "%s: %s\n", label, types[0])
+	default:
+		fmt.Fprintf(details, "%ss: %v\n", label, types)
+	}
+}
+
+func formatSchemaDetails(proxy *base.SchemaProxy) string {
+	if proxy == nil || proxy.Schema() == nil {
 		return "No schema details available"
 	}
-
-	s := schema.Schema()
-
-	// Handle both single type (OpenAPI 3.0) and array of types (OpenAPI 3.1)
-	if len(s.Type) > 0 {
-		if len(s.Type) == 1 {
-			details.WriteString(fmt.Sprintf("Type: %s\n", s.Type[0]))
-		} else {
-			details.WriteString(fmt.Sprintf("Types: %v\n", s.Type))
-		}
+	schema := proxy.Schema()
+	var details strings.Builder
+	writeSchemaType(&details, "Type", schema.Type)
+	if schema.Format != "" {
+		fmt.Fprintf(&details, "Format: %s\n", schema.Format)
 	}
-
-	if s.Format != "" {
-		details.WriteString(fmt.Sprintf("Format: %s\n", s.Format))
+	if len(schema.Required) > 0 {
+		fmt.Fprintf(&details, "Required: %v\n", schema.Required)
 	}
-
-	if len(s.Required) > 0 {
-		details.WriteString(fmt.Sprintf("Required: %v\n", s.Required))
-	}
-
-	if s.Properties != nil && s.Properties.Len() > 0 {
+	if names := sortedKeys(schema.Properties); len(names) > 0 {
 		details.WriteString("Properties:\n")
-
-		// Get property names and sort them for stable ordering
-		var propNames []string
-		for pair := s.Properties.First(); pair != nil; pair = pair.Next() {
-			propNames = append(propNames, pair.Key())
-		}
-		sort.Strings(propNames)
-
-		for _, propName := range propNames {
-			if prop, ok := s.Properties.Get(propName); ok && prop != nil && prop.Schema() != nil {
-				propType := "unknown"
-				if len(prop.Schema().Type) > 0 {
-					if len(prop.Schema().Type) == 1 {
-						propType = prop.Schema().Type[0]
-					} else {
-						propType = fmt.Sprintf("%v", prop.Schema().Type)
-					}
+		for _, name := range names {
+			if property := schema.Properties.GetOrZero(name); property != nil && property.Schema() != nil {
+				types := property.Schema().Type
+				kind := "unknown"
+				if len(types) == 1 {
+					kind = types[0]
+				} else if len(types) > 1 {
+					kind = fmt.Sprint(types)
 				}
-				details.WriteString(fmt.Sprintf("  - %s: %s\n", propName, propType))
+				fmt.Fprintf(&details, "  - %s: %s\n", name, kind)
 			}
 		}
 	}
-
-	if s.Items != nil && s.Items.A != nil && s.Items.A.Schema() != nil && len(s.Items.A.Schema().Type) > 0 {
-		itemsType := s.Items.A.Schema().Type
-		if len(itemsType) == 1 {
-			details.WriteString(fmt.Sprintf("Items Type: %s\n", itemsType[0]))
-		} else {
-			details.WriteString(fmt.Sprintf("Items Types: %v\n", itemsType))
-		}
+	if schema.Items != nil && schema.Items.A != nil && schema.Items.A.Schema() != nil {
+		writeSchemaType(&details, "Items Type", schema.Items.A.Schema().Type)
 	}
-
 	return details.String()
 }
 
-func formatRequestBodyDetails(reqBody *v3.RequestBody) string {
-	var details strings.Builder
-
-	if reqBody == nil {
+func formatRequestBodyDetails(body *v3.RequestBody) string {
+	if body == nil {
 		return "No request body details available"
 	}
-
-	if reqBody.Required != nil && *reqBody.Required {
+	var details strings.Builder
+	if body.Required != nil && *body.Required {
 		details.WriteString("Required: true\n")
 	}
-
-	if reqBody.Content != nil && reqBody.Content.Len() > 0 {
-		details.WriteString("Content Types:\n")
-
-		// Get media types and sort them for stable ordering
-		var mediaTypes []string
-		for pair := reqBody.Content.First(); pair != nil; pair = pair.Next() {
-			mediaTypes = append(mediaTypes, pair.Key())
-		}
-		sort.Strings(mediaTypes)
-
-		for _, mediaType := range mediaTypes {
-			if mediaTypeObj, ok := reqBody.Content.Get(mediaType); ok && mediaTypeObj != nil {
-				details.WriteString(fmt.Sprintf("  - %s", mediaType))
-				if mediaTypeObj.Schema != nil && mediaTypeObj.Schema.Schema() != nil && len(mediaTypeObj.Schema.Schema().Type) > 0 {
-					types := mediaTypeObj.Schema.Schema().Type
-					if len(types) == 1 {
-						details.WriteString(fmt.Sprintf(" (type: %s)", types[0]))
-					} else {
-						details.WriteString(fmt.Sprintf(" (types: %v)", types))
-					}
-				}
-				details.WriteString("\n")
-			}
-		}
+	if content := formatContent(body.Content); content != "" {
+		details.WriteString("Content Types:\n" + content)
 	}
-
 	return details.String()
 }
 
 func formatResponseDetails(response *v3.Response) string {
-	var details strings.Builder
-
 	if response == nil {
 		return "No response details available"
 	}
-
-	if response.Content != nil && response.Content.Len() > 0 {
-		details.WriteString("Content Types:\n")
-
-		// Get media types and sort them for stable ordering
-		var mediaTypes []string
-		for pair := response.Content.First(); pair != nil; pair = pair.Next() {
-			mediaTypes = append(mediaTypes, pair.Key())
-		}
-		sort.Strings(mediaTypes)
-
-		for _, mediaType := range mediaTypes {
-			if mediaTypeObj, ok := response.Content.Get(mediaType); ok && mediaTypeObj != nil {
-				details.WriteString(fmt.Sprintf("  - %s", mediaType))
-				if mediaTypeObj.Schema != nil && mediaTypeObj.Schema.Schema() != nil && len(mediaTypeObj.Schema.Schema().Type) > 0 {
-					types := mediaTypeObj.Schema.Schema().Type
-					if len(types) == 1 {
-						details.WriteString(fmt.Sprintf(" (type: %s)", types[0]))
-					} else {
-						details.WriteString(fmt.Sprintf(" (types: %v)", types))
-					}
-				}
-				details.WriteString("\n")
-			}
-		}
+	var details strings.Builder
+	if content := formatContent(response.Content); content != "" {
+		details.WriteString("Content Types:\n" + content)
 	}
-
-	if response.Headers != nil && response.Headers.Len() > 0 {
+	if headers := sortedKeys(response.Headers); len(headers) > 0 {
 		details.WriteString("Headers:\n")
-
-		// Get header names and sort them for stable ordering
-		var headerNames []string
-		for pair := response.Headers.First(); pair != nil; pair = pair.Next() {
-			headerNames = append(headerNames, pair.Key())
-		}
-		sort.Strings(headerNames)
-
-		for _, headerName := range headerNames {
-			details.WriteString(fmt.Sprintf("  - %s\n", headerName))
+		for _, name := range headers {
+			fmt.Fprintf(&details, "  - %s\n", name)
 		}
 	}
-
 	return details.String()
 }
 
-func formatParameterDetails(param *v3.Parameter) string {
+func formatTypedSchema(proxy *base.SchemaProxy) string {
 	var details strings.Builder
+	if proxy != nil && proxy.Schema() != nil {
+		schema := proxy.Schema()
+		writeSchemaType(&details, "Type", schema.Type)
+		if schema.Format != "" {
+			fmt.Fprintf(&details, "Format: %s\n", schema.Format)
+		}
+	}
+	return details.String()
+}
 
-	if param == nil {
+func formatParameterDetails(parameter *v3.Parameter) string {
+	if parameter == nil {
 		return "No parameter details available"
 	}
-
-	details.WriteString(fmt.Sprintf("In: %s\n", param.In))
-
-	if param.Required != nil && *param.Required {
+	var details strings.Builder
+	fmt.Fprintf(&details, "In: %s\n", parameter.In)
+	if parameter.Required != nil && *parameter.Required {
 		details.WriteString("Required: true\n")
 	}
-
-	if param.Schema != nil && param.Schema.Schema() != nil && len(param.Schema.Schema().Type) > 0 {
-		types := param.Schema.Schema().Type
-		if len(types) == 1 {
-			details.WriteString(fmt.Sprintf("Type: %s\n", types[0]))
-		} else {
-			details.WriteString(fmt.Sprintf("Types: %v\n", types))
-		}
-		if param.Schema.Schema().Format != "" {
-			details.WriteString(fmt.Sprintf("Format: %s\n", param.Schema.Schema().Format))
-		}
+	details.WriteString(formatTypedSchema(parameter.Schema))
+	if parameter.Example != nil {
+		fmt.Fprintf(&details, "Example: %v\n", parameter.Example)
 	}
-
-	if param.Example != nil {
-		details.WriteString(fmt.Sprintf("Example: %v\n", param.Example))
-	}
-
 	return details.String()
 }
 
 func formatHeaderDetails(header *v3.Header) string {
-	var details strings.Builder
-
 	if header == nil {
 		return "No header details available"
 	}
-
+	var details strings.Builder
 	if header.Required {
 		details.WriteString("Required: true\n")
 	}
-
-	if header.Schema != nil && header.Schema.Schema() != nil && len(header.Schema.Schema().Type) > 0 {
-		types := header.Schema.Schema().Type
-		if len(types) == 1 {
-			details.WriteString(fmt.Sprintf("Type: %s\n", types[0]))
-		} else {
-			details.WriteString(fmt.Sprintf("Types: %v\n", types))
-		}
-		if header.Schema.Schema().Format != "" {
-			details.WriteString(fmt.Sprintf("Format: %s\n", header.Schema.Schema().Format))
-		}
-	}
-
+	details.WriteString(formatTypedSchema(header.Schema))
 	return details.String()
 }
 
-func formatSecuritySchemeDetails(name string, secScheme *v3.SecurityScheme) string {
-	var details strings.Builder
-
-	if secScheme == nil {
+func formatSecuritySchemeDetails(scheme *v3.SecurityScheme) string {
+	if scheme == nil {
 		return "No security scheme details available"
 	}
-
-	details.WriteString(fmt.Sprintf("Type: %s\n", secScheme.Type))
-
-	if secScheme.Scheme != "" {
-		details.WriteString(fmt.Sprintf("Scheme: %s\n", secScheme.Scheme))
-	}
-
-	if secScheme.BearerFormat != "" {
-		details.WriteString(fmt.Sprintf("Bearer Format: %s\n", secScheme.BearerFormat))
-	}
-
-	if secScheme.In != "" {
-		details.WriteString(fmt.Sprintf("In: %s\n", secScheme.In))
-	}
-
-	if secScheme.Name != "" {
-		details.WriteString(fmt.Sprintf("Name: %s\n", secScheme.Name))
-	}
-
-	return details.String()
-}
-
-func formatWebhookDetails(hook webhook) string {
 	var details strings.Builder
-
-	if hook.op.Summary != "" {
-		details.WriteString(fmt.Sprintf("Summary: %s\n", hook.op.Summary))
+	fmt.Fprintf(&details, "Type: %s\n", scheme.Type)
+	for _, field := range [][2]string{
+		{"Scheme", scheme.Scheme}, {"Bearer Format", scheme.BearerFormat},
+		{"In", scheme.In}, {"Name", scheme.Name},
+	} {
+		if field[1] != "" {
+			fmt.Fprintf(&details, "%s: %s\n", field[0], field[1])
+		}
 	}
-
-	if hook.op.Description != "" {
-		details.WriteString(fmt.Sprintf("Description: %s\n", hook.op.Description))
-	}
-
-	if hook.op.OperationId != "" {
-		details.WriteString(fmt.Sprintf("Operation ID: %s\n", hook.op.OperationId))
-	}
-
 	return details.String()
 }

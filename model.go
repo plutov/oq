@@ -14,222 +14,114 @@ const (
 	viewEndpoints viewMode = iota
 	viewComponents
 	viewWebhooks
+	viewCount
 )
 
 const keySequenceThreshold = 500 * time.Millisecond
 
-const scrollHalfScreenLines = 21
-
-// Layout constants (shared with view.go)
-const (
-	// Height
-
-	headerApproxLines = 2 // Single line header + one empty line
-	footerApproxLines = 4
-	layoutBuffer      = 2 // Extra buffer to ensure header visibility
-
-	// Width
-
-	leftPaddingChars = 2 // "▶" + space
-)
-
-// calculateContentHeight returns the available height for content given the total viewport height
-func calculateContentHeight(totalHeight int) int {
-	return max(1, totalHeight-headerApproxLines-footerApproxLines-layoutBuffer)
-}
-
-func calculateContentWidth(totalWidth int) int {
-	return max(1, totalWidth-leftPaddingChars)
-}
-
-type webhook struct {
-	name   string
-	method string
-	op     *v3.Operation
-	folded bool
-}
-
-type endpoint struct {
-	path   string
-	method string
-	op     *v3.Operation
-	folded bool
-}
-
-type component struct {
+type item struct {
 	name        string
-	compType    string
+	kind        string
 	description string
 	details     string
 	folded      bool
 }
 
 type Model struct {
-	doc          *v3.Document
-	endpoints    []endpoint
-	components   []component
-	webhooks     []webhook
+	title        string
+	items        [viewCount][]item
 	cursor       int
 	mode         viewMode
 	width        int
 	height       int
 	showHelp     bool
-	lastKey      string
 	lastKeyAt    time.Time
 	scrollOffset int
 }
 
-func (m *Model) getItemHeight(index int) int {
-	switch m.mode {
-	case viewEndpoints:
-		if index >= len(m.endpoints) {
-			return 1
+func NewModel(doc *v3.Document) Model {
+	m := Model{width: 80, height: 24}
+	if doc != nil {
+		if doc.Info != nil {
+			m.title = doc.Info.Title + " v" + doc.Info.Version
 		}
-		ep := m.endpoints[index]
-		if ep.folded {
-			return 1 // Just the main line when folded
+		if doc.Paths != nil {
+			m.items[viewEndpoints] = extractOperations(doc.Paths.PathItems)
 		}
-		// When unfolded, count main line + detail lines
-		details := formatEndpointDetails(ep)
-		return 1 + strings.Count(details, "\n") + 1 // +1 for main line, +1 for the detail section
-	case viewComponents:
-		if index >= len(m.components) {
-			return 1
-		}
-		comp := m.components[index]
-		if comp.folded {
-			return 1 // Just the main line when folded
-		}
-		// When unfolded, count main line + detail lines
-		return 1 + strings.Count(comp.details, "\n") + 1 // +1 for main line, +1 for the detail section
-	case viewWebhooks:
-		if index >= len(m.webhooks) {
-			return 1
-		}
-		hook := m.webhooks[index]
-		if hook.folded {
-			return 1 // Just the main line when folded
-		}
-		// When unfolded, count main line + detail lines
-		details := formatWebhookDetails(hook)
-		return 1 + strings.Count(details, "\n") + 1 // +1 for main line, +1 for the detail section
+		m.items[viewWebhooks] = extractOperations(doc.Webhooks)
+		m.items[viewComponents] = extractComponents(doc)
 	}
-	return 1
+	return m
 }
 
-func (m *Model) getMaxItems() int {
-	switch m.mode {
-	case viewEndpoints:
-		return len(m.endpoints) - 1
-	case viewComponents:
-		return len(m.components) - 1
-	case viewWebhooks:
-		return len(m.webhooks) - 1
-	default:
-		return -1
+func (m Model) activeItems() []item {
+	return m.items[m.mode]
+}
+
+func (m Model) availableViews() []viewMode {
+	views := []viewMode{viewEndpoints}
+	if len(m.items[viewWebhooks]) > 0 {
+		views = append(views, viewWebhooks)
 	}
+	return append(views, viewComponents)
+}
+
+func (m *Model) cycleView(direction int) {
+	views := m.availableViews()
+	for i, mode := range views {
+		if mode == m.mode {
+			m.mode = views[(i+direction+len(views))%len(views)]
+			break
+		}
+	}
+	m.cursor, m.scrollOffset = 0, 0
+}
+
+func (m Model) contentHeight() int {
+	return max(1, m.height-4)
+}
+
+func (m Model) getItemHeight(index int) int {
+	entry := m.activeItems()[index]
+	if entry.folded || entry.details == "" {
+		return 1
+	}
+	return 2 + strings.Count(strings.TrimRight(entry.details, "\n"), "\n")
 }
 
 func (m *Model) ensureCursorVisible() {
-	// Calculate available content height using shared function
-	contentHeight := calculateContentHeight(m.height)
-
-	// Special case: if cursor is at 0, ensure we scroll to the very top
+	if len(m.activeItems()) == 0 {
+		m.cursor, m.scrollOffset = 0, 0
+		return
+	}
+	m.cursor = max(0, min(m.cursor, len(m.activeItems())-1))
+	m.scrollOffset = max(0, min(m.scrollOffset, m.cursor))
 	if m.cursor == 0 {
 		m.scrollOffset = 0
 		return
 	}
 
-	// Calculate the actual rendered height of items to properly handle viewport
-	var items []interface{}
-	switch m.mode {
-	case viewEndpoints:
-		for i := range m.endpoints {
-			items = append(items, m.endpoints[i])
+	height := m.contentHeight()
+	lines := min(m.getItemHeight(m.cursor), max(1, height-1))
+	for i := m.scrollOffset; i < m.cursor; i++ {
+		lines += m.getItemHeight(i)
+	}
+	for m.scrollOffset < m.cursor {
+		indicatorHeight := 0
+		if m.scrollOffset > 0 {
+			indicatorHeight = 1
 		}
-	case viewComponents:
-		for i := range m.components {
-			items = append(items, m.components[i])
+		if lines+indicatorHeight <= height {
+			break
 		}
-	case viewWebhooks:
-		for i := range m.webhooks {
-			items = append(items, m.webhooks[i])
-		}
-	}
-
-	if len(items) == 0 {
-		return
-	}
-
-	// Calculate lines used by items from scrollOffset to cursor
-	linesUsed := 0
-
-	// If cursor is above current scroll position, scroll up to show it
-	if m.cursor < m.scrollOffset {
-		m.scrollOffset = m.cursor
-		return
-	}
-
-	// Calculate how many lines are used from scrollOffset to cursor (inclusive)
-	for i := m.scrollOffset; i <= m.cursor && i < len(items); i++ {
-		linesUsed += m.getItemHeight(i)
-	}
-
-	// Account for scroll indicators
-	if m.scrollOffset > 0 {
-		linesUsed++ // "More items above" indicator
-	}
-
-	// If the cursor item extends beyond available content height, scroll down
-	if linesUsed > contentHeight {
-		// Find the minimum scroll offset that keeps cursor visible
-		for newScrollOffset := m.scrollOffset + 1; newScrollOffset <= m.cursor; newScrollOffset++ {
-			testLinesUsed := 0
-
-			// Account for "More items above" indicator
-			if newScrollOffset > 0 {
-				testLinesUsed++
-			}
-
-			// Calculate lines from new scroll offset to cursor
-			for i := newScrollOffset; i <= m.cursor && i < len(items); i++ {
-				testLinesUsed += m.getItemHeight(i)
-			}
-
-			if testLinesUsed <= contentHeight {
-				m.scrollOffset = newScrollOffset
-				break
-			}
-		}
-	}
-
-	// Ensure scroll offset doesn't go negative
-	if m.scrollOffset < 0 {
-		m.scrollOffset = 0
+		lines -= m.getItemHeight(m.scrollOffset)
+		m.scrollOffset++
 	}
 }
 
-func NewModel(doc *v3.Document) Model {
-	endpoints := extractEndpoints(doc)
-	components := extractComponents(doc)
-	webhooks := extractWebhooks(doc)
-
-	return Model{
-		doc:          doc,
-		endpoints:    endpoints,
-		components:   components,
-		webhooks:     webhooks,
-		cursor:       0,
-		mode:         viewEndpoints,
-		width:        80,
-		height:       24,
-		showHelp:     false,
-		scrollOffset: 0,
-	}
-}
-
-func (m *Model) hasWebhooks() bool {
-	return len(m.webhooks) > 0
+func (m *Model) moveCursor(delta int) {
+	m.cursor += delta
+	m.ensureCursorVisible()
 }
 
 func (m Model) Init() tea.Cmd {
@@ -239,207 +131,67 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-
+		m.width, m.height = max(1, msg.Width), max(1, msg.Height)
+		m.ensureCursorVisible()
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c":
-			if m.showHelp {
-				m.showHelp = false
-			} else {
-				return m, tea.Quit
-			}
+		key := msg.String()
+		previousG := m.lastKeyAt
+		m.lastKeyAt = time.Time{}
 
-		case "?":
+		if key == "ctrl+c" {
+			return m, tea.Quit
+		}
+		if key == "?" {
 			m.showHelp = !m.showHelp
-
-		case "esc":
-			if m.showHelp {
+			return m, nil
+		}
+		if m.showHelp {
+			if key == "q" || key == "esc" {
 				m.showHelp = false
 			}
+			return m, nil
+		}
 
+		switch key {
+		case "q":
+			return m, tea.Quit
 		case "tab", "L":
-			if !m.showHelp {
-				// Cycle forward through available views
-				switch m.mode {
-				case viewEndpoints:
-					if m.hasWebhooks() {
-						m.mode = viewWebhooks
-					} else {
-						m.mode = viewComponents
-					}
-				case viewWebhooks:
-					m.mode = viewComponents
-				case viewComponents:
-					m.mode = viewEndpoints
-				}
-				m.cursor = 0
-				m.scrollOffset = 0
-			}
-
+			m.cycleView(1)
 		case "shift+tab", "H":
-			if !m.showHelp {
-				// Cycle backwards through available views
-				switch m.mode {
-				case viewEndpoints:
-					m.mode = viewComponents
-				case viewWebhooks:
-					m.mode = viewEndpoints
-				case viewComponents:
-					if m.hasWebhooks() {
-						m.mode = viewWebhooks
-					} else {
-						m.mode = viewEndpoints
-					}
-				}
-				m.cursor = 0
-				m.scrollOffset = 0
-			}
-
+			m.cycleView(-1)
 		case "up", "k":
-			if !m.showHelp && m.cursor > 0 {
-				m.cursor--
-				m.ensureCursorVisible()
-			}
-
+			m.moveCursor(-1)
 		case "down", "j":
-			if !m.showHelp {
-				if m.cursor < m.getMaxItems() {
-					m.cursor++
-					m.ensureCursorVisible()
-				}
-			}
-
+			m.moveCursor(1)
 		case "ctrl+d":
-			if !m.showHelp {
-				maxItems := m.getMaxItems()
-				newCursorPos := m.cursor + scrollHalfScreenLines
-
-				if newCursorPos > maxItems {
-					m.cursor = maxItems
-				} else {
-					m.cursor += scrollHalfScreenLines
-				}
-
-				m.ensureCursorVisible()
-			}
-
+			m.moveCursor(max(1, m.contentHeight()/2))
 		case "ctrl+u":
-			if !m.showHelp {
-				halfLines := max(1, calculateContentHeight(m.height)/2)
-				if m.cursor < halfLines {
-					m.cursor = 0
-				} else {
-					m.cursor -= halfLines
-				}
-
-				m.ensureCursorVisible()
-			}
-
+			m.moveCursor(-max(1, m.contentHeight()/2))
 		case "G":
-			if !m.showHelp {
-				maxItems := m.getMaxItems()
-				if maxItems >= 0 {
-					m.cursor = maxItems
-					m.ensureCursorVisible()
-				}
-			}
-
+			m.cursor = len(m.activeItems()) - 1
+			m.ensureCursorVisible()
 		case "g":
 			now := time.Now()
-			if m.lastKey == "g" && now.Sub(m.lastKeyAt) < keySequenceThreshold {
-				if !m.showHelp {
-					m.cursor = 0
-					m.ensureCursorVisible()
-				}
-
-				// reset, so "ggg" wouldn't be triggered
-				m.lastKey = ""
-				m.lastKeyAt = time.Time{}
-
+			if !previousG.IsZero() && now.Sub(previousG) < keySequenceThreshold {
+				m.cursor = 0
+				m.ensureCursorVisible()
 			} else {
-				m.lastKey = "g"
 				m.lastKeyAt = now
 			}
-
 		case "enter", " ":
-			if !m.showHelp {
-				if m.mode == viewEndpoints && m.cursor < len(m.endpoints) {
-					m.endpoints[m.cursor].folded = !m.endpoints[m.cursor].folded
-				} else if m.mode == viewComponents && m.cursor < len(m.components) {
-					m.components[m.cursor].folded = !m.components[m.cursor].folded
-				} else if m.mode == viewWebhooks && m.cursor < len(m.webhooks) {
-					m.webhooks[m.cursor].folded = !m.webhooks[m.cursor].folded
-				}
+			entries := m.activeItems()
+			if len(entries) > 0 {
+				entries[m.cursor].folded = !entries[m.cursor].folded
+				m.ensureCursorVisible()
 			}
 		}
 	}
-
 	return m, nil
 }
 
-// truncateContent ensures content doesn't exceed the available lines
-func (m Model) truncateContent(content string, maxLines int) string {
-	lines := strings.Split(content, "\n")
-	if len(lines) <= maxLines {
-		return content
-	}
-
-	// Truncate to fit and add an indicator
-	truncatedLines := lines[:maxLines-1]
-	truncatedLines = append(truncatedLines, "⬇ Content truncated to fit viewport...")
-
-	return strings.Join(truncatedLines, "\n")
-}
-
 func (m Model) View() string {
-	var s strings.Builder
-
-	header := m.renderHeader()
-	footer := m.renderFooter()
-
-	headerLines := strings.Count(header, "\n")
-	footerLines := strings.Count(footer, "\n")
-
-	// Calculate how many lines are available for content
-	availableContentLines := m.height - headerLines - footerLines - 1
-	if availableContentLines < 1 {
-		availableContentLines = 1
-	}
-
-	// Render content
-	var content string
-	switch m.mode {
-	case viewEndpoints:
-		content = m.renderEndpoints()
-	case viewComponents:
-		content = m.renderComponents()
-	case viewWebhooks:
-		content = m.renderWebhooks()
-	}
-
-	// Truncate content if it's too long
-	content = m.truncateContent(content, availableContentLines)
-
-	s.WriteString(header)
-	s.WriteString(content)
-
-	contentLines := strings.Count(content, "\n")
-	usedLines := headerLines + contentLines + footerLines
-	remainingLines := m.height - usedLines - 1
-
-	if remainingLines > 0 {
-		s.WriteString(strings.Repeat("\n", remainingLines))
-	}
-
-	s.WriteString(footer)
-
-	baseView := s.String()
-
 	if m.showHelp {
-		return m.renderHelpModal()
+		return fitView(m.renderHelpModal(), m.width, m.height)
 	}
-
-	return baseView
+	return fitView(m.renderHeader()+m.renderItems()+m.renderFooter(), m.width, m.height)
 }

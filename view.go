@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 const (
@@ -21,363 +21,128 @@ const (
 	colorWhite       = "#FFFFFF"
 )
 
-var methodColors = map[string]lipgloss.Color{
-	"GET":     colorGreen,
-	"POST":    colorBlue,
-	"PUT":     colorYellow,
-	"DELETE":  colorRed,
-	"PATCH":   colorPurple,
-	"HEAD":    colorGray,
-	"OPTIONS": colorGray,
-	"TRACE":   colorGray,
+var kindColors = map[string]lipgloss.Color{
+	"GET": colorGreen, "POST": colorBlue, "PUT": colorYellow,
+	"DELETE": colorRed, "PATCH": colorPurple,
+	"Schema": colorGreen, "RequestBody": colorBlue, "Response": colorYellow,
+	"Parameter": colorPurple, "Header": colorRed,
 }
 
-func (m Model) renderEndpoints() string {
-	var s strings.Builder
-
-	// Calculate available content height and width
-	contentHeight := calculateContentHeight(m.height)
-	contentWidth := calculateContentWidth(m.width)
-
-	startIdx := m.scrollOffset
-	endIdx := min(m.scrollOffset+contentHeight, len(m.endpoints))
-
-	// Add scroll indicator for items above
-	if m.scrollOffset > 0 {
-		indicator := lipgloss.NewStyle().
-			Foreground(lipgloss.Color(colorGray)).
-			Render("⬆ More items above...")
-		s.WriteString(indicator)
-		s.WriteString("\n")
-	}
-
-	for i := startIdx; i < endIdx; i++ {
-		ep := m.endpoints[i]
-		style := lipgloss.NewStyle()
-
-		methodColor := methodColors[ep.method]
-		if methodColor == "" {
-			methodColor = colorGray
-		}
-
-		methodStyle := lipgloss.NewStyle().
-			Foreground(methodColor).
-			Bold(true).
-			Width(7)
-
-		if i == m.cursor {
-			style = style.Background(lipgloss.Color(colorBackground))
-			methodStyle = methodStyle.Background(lipgloss.Color(colorBackground))
-		}
-
-		foldIcon := "▶"
-		if !ep.folded {
-			foldIcon = "▼"
-		}
-
-		var line strings.Builder
-		line.WriteString(style.Render(foldIcon + " "))
-		line.WriteString(methodStyle.Render(ep.method))
-		line.WriteString(style.Render(" " + ep.path))
-		line.WriteString(style.Render(strings.Repeat(" ", contentWidth)))
-
-		s.WriteString(style.Render(line.String()))
-		s.WriteString("\n")
-
-		if !ep.folded {
-			details := formatEndpointDetails(ep)
-			detailStyle := lipgloss.NewStyle().
-				PaddingLeft(2).
-				Foreground(lipgloss.Color(colorDetailGray))
-			s.WriteString(detailStyle.Render(details))
-			s.WriteString("\n")
-		}
-	}
-
-	// Add scroll indicator for items below
-	if endIdx < len(m.endpoints) {
-		indicator := lipgloss.NewStyle().
-			Foreground(lipgloss.Color(colorGray)).
-			Render("⬇ More items below...")
-		s.WriteString(indicator)
-		s.WriteString("\n")
-	}
-
-	return s.String()
+func singleLine(text string) string {
+	return strings.Join(strings.Fields(text), " ")
 }
 
-func (m Model) renderComponents() string {
-	var s strings.Builder
-
-	componentColors := map[string]lipgloss.Color{
-		"Schema":         colorGreen,
-		"RequestBody":    colorBlue,
-		"Response":       colorYellow,
-		"Parameter":      colorPurple,
-		"Header":         colorRed,
-		"SecurityScheme": colorGray,
+func fitView(content string, width, height int) string {
+	lines := strings.Split(content, "\n")
+	lines = lines[:min(len(lines), max(1, height))]
+	for i, line := range lines {
+		lines[i] = ansi.Truncate(line, max(1, width), "")
 	}
-
-	// Calculate available content height and width
-	contentHeight := calculateContentHeight(m.height)
-	contentWidth := calculateContentWidth(m.width)
-
-	startIdx := m.scrollOffset
-	endIdx := min(m.scrollOffset+contentHeight, len(m.components))
-
-	// Add scroll indicator for items above
-	if m.scrollOffset > 0 {
-		indicator := lipgloss.NewStyle().
-			Foreground(lipgloss.Color(colorGray)).
-			Render("⬆ More items above...")
-		s.WriteString(indicator)
-		s.WriteString("\n")
-	}
-
-	for i := startIdx; i < endIdx; i++ {
-		comp := m.components[i]
-		style := lipgloss.NewStyle()
-
-		componentColor := componentColors[comp.compType]
-		if componentColor == "" {
-			componentColor = colorGray
-		}
-
-		typeStyle := lipgloss.NewStyle().
-			Foreground(componentColor).
-			Bold(true).
-			Width(16)
-
-		if i == m.cursor {
-			style = style.Background(lipgloss.Color(colorBackground))
-			typeStyle = typeStyle.Background(lipgloss.Color(colorBackground))
-		}
-
-		foldIcon := "▶"
-		if !comp.folded {
-			foldIcon = "▼"
-		}
-
-		var line strings.Builder
-		line.WriteString(style.Render(foldIcon + " "))
-		line.WriteString(typeStyle.Render(comp.compType + ":"))
-		line.WriteString(style.Render(comp.name + " "))
-		line.WriteString(style.Render(strings.Repeat(" ", contentWidth)))
-
-		if comp.description != "" {
-			line.WriteString(style.Render(" - " + comp.description))
-		}
-
-		s.WriteString(style.Render(line.String()))
-		s.WriteString("\n")
-
-		if !comp.folded {
-			detailStyle := lipgloss.NewStyle().
-				PaddingLeft(2).
-				Foreground(lipgloss.Color(colorDetailGray))
-			s.WriteString(detailStyle.Render(comp.details))
-			s.WriteString("\n")
-		}
-	}
-
-	// Add scroll indicator for items below
-	if endIdx < len(m.components) {
-		indicator := lipgloss.NewStyle().
-			Foreground(lipgloss.Color(colorGray)).
-			Render("⬇ More items below...")
-		s.WriteString(indicator)
-		s.WriteString("\n")
-	}
-
-	return s.String()
+	return strings.Join(lines, "\n")
 }
 
-func (m Model) renderWebhooks() string {
-	var s strings.Builder
-
-	// Calculate available content height and width
-	contentHeight := calculateContentHeight(m.height)
-	contentWidth := calculateContentWidth(m.width)
-
-	startIdx := m.scrollOffset
-	endIdx := min(m.scrollOffset+contentHeight, len(m.webhooks))
-
-	// Add scroll indicator for items above
-	if m.scrollOffset > 0 {
-		indicator := lipgloss.NewStyle().
-			Foreground(lipgloss.Color(colorGray)).
-			Render("⬆ More items above...")
-		s.WriteString(indicator)
-		s.WriteString("\n")
+func (m Model) renderItem(entry item, selected bool) []string {
+	style := lipgloss.NewStyle()
+	color := kindColors[entry.kind]
+	if color == "" {
+		color = colorGray
 	}
-
-	for i := startIdx; i < endIdx; i++ {
-		hook := m.webhooks[i]
-		style := lipgloss.NewStyle()
-
-		methodColor := methodColors[hook.method]
-		if methodColor == "" {
-			methodColor = colorGray
+	label, labelWidth := singleLine(entry.kind), 7
+	if m.mode == viewComponents {
+		label, labelWidth = label+":", 16
+	}
+	labelStyle := lipgloss.NewStyle().Foreground(color).Bold(true).Width(labelWidth)
+	if selected {
+		style = style.Background(lipgloss.Color(colorBackground))
+		labelStyle = labelStyle.Background(lipgloss.Color(colorBackground))
+	}
+	icon := "▶"
+	if !entry.folded {
+		icon = "▼"
+	}
+	name := singleLine(entry.name)
+	if entry.description != "" {
+		name += " - " + singleLine(entry.description)
+	}
+	line := style.Render(icon+" ") + labelStyle.Render(ansi.Truncate(label, labelWidth, "")) + style.Render(" "+name)
+	line = ansi.Truncate(line, max(1, m.width), "")
+	line += style.Render(strings.Repeat(" ", max(0, m.width-lipgloss.Width(line))))
+	lines := []string{line}
+	if !entry.folded && entry.details != "" {
+		detailStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colorDetailGray))
+		for _, detail := range strings.Split(strings.TrimRight(entry.details, "\n"), "\n") {
+			lines = append(lines, ansi.Truncate(detailStyle.Render("  "+detail), max(1, m.width), ""))
 		}
+	}
+	return lines
+}
 
-		methodStyle := lipgloss.NewStyle().
-			Foreground(methodColor).
-			Bold(true).
-			Width(7)
-
+func (m Model) renderItems() string {
+	height := m.contentHeight()
+	lines := make([]string, 0, height)
+	indicatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colorGray))
+	if m.scrollOffset > 0 && height > 1 {
+		lines = append(lines, indicatorStyle.Render("⬆ More items above..."))
+	}
+	entries := m.activeItems()
+	selectedLine := -1
+	for i := m.scrollOffset; i < len(entries); i++ {
+		if len(lines) >= height {
+			if selectedLine != height-1 {
+				lines[height-1] = indicatorStyle.Render("⬇ More items below...")
+			}
+			break
+		}
 		if i == m.cursor {
-			style = style.Background(lipgloss.Color(colorBackground))
-			methodStyle = methodStyle.Background(lipgloss.Color(colorBackground))
+			selectedLine = len(lines)
 		}
-
-		foldIcon := "▶"
-		if !hook.folded {
-			foldIcon = "▼"
-		}
-
-		var line strings.Builder
-		line.WriteString(style.Render(foldIcon + " "))
-		line.WriteString(methodStyle.Render(hook.method + " "))
-		line.WriteString(style.Render(hook.name + " "))
-		line.WriteString(style.Render(strings.Repeat(" ", contentWidth)))
-
-		s.WriteString(style.Render(line.String()))
-		s.WriteString("\n")
-
-		if !hook.folded {
-			details := formatWebhookDetails(hook)
-			detailStyle := lipgloss.NewStyle().
-				PaddingLeft(2).
-				Foreground(lipgloss.Color(colorDetailGray))
-			s.WriteString(detailStyle.Render(details))
-			s.WriteString("\n")
-		}
+		itemLines := m.renderItem(entries[i], i == m.cursor)
+		lines = append(lines, itemLines[:min(len(itemLines), height-len(lines))]...)
 	}
-
-	// Add scroll indicator for items below
-	if endIdx < len(m.webhooks) {
-		indicator := lipgloss.NewStyle().
-			Foreground(lipgloss.Color(colorGray)).
-			Render("⬇ More items below...")
-		s.WriteString(indicator)
-		s.WriteString("\n")
+	for len(lines) < height {
+		lines = append(lines, "")
 	}
-
-	return s.String()
+	return strings.Join(lines, "\n") + "\n"
 }
 
 func (m Model) renderHeader() string {
-	// Button styles for navigation
-	buttonStyle := lipgloss.NewStyle().
-		Padding(0, 1).
-		Foreground(lipgloss.Color(colorGray))
-
-	activeButtonStyle := buttonStyle.
-		Background(lipgloss.Color(colorThemePurple)).
-		Foreground(lipgloss.Color(colorWhite)).
-		Bold(true)
-
-	// App title style for right side
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color(colorThemePurple))
-
-	// Build navigation buttons
+	buttonStyle := lipgloss.NewStyle().Padding(0, 1).Foreground(lipgloss.Color(colorGray))
+	activeStyle := buttonStyle.Background(lipgloss.Color(colorThemePurple)).
+		Foreground(lipgloss.Color(colorWhite)).Bold(true)
+	titles := [...]string{"Requests", "Components", "Webhooks"}
 	var buttons []string
-
-	// Endpoints button
-	if m.mode == viewEndpoints {
-		buttons = append(buttons, activeButtonStyle.Render("Requests"))
-	} else {
-		buttons = append(buttons, buttonStyle.Render("Requests"))
-	}
-
-	// Webhooks button (only if available)
-	if m.hasWebhooks() {
-		if m.mode == viewWebhooks {
-			buttons = append(buttons, activeButtonStyle.Render("Webhooks"))
-		} else {
-			buttons = append(buttons, buttonStyle.Render("Webhooks"))
+	for _, mode := range m.availableViews() {
+		style := buttonStyle
+		if mode == m.mode {
+			style = activeStyle
 		}
+		buttons = append(buttons, style.Render(titles[mode]))
 	}
-
-	// Components button
-	if m.mode == viewComponents {
-		buttons = append(buttons, activeButtonStyle.Render("Components"))
-	} else {
-		buttons = append(buttons, buttonStyle.Render("Components"))
+	header := strings.Join(buttons, " │ ")
+	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(colorThemePurple)).
+		Render("oq - OpenAPI Spec Viewer")
+	if space := m.width - lipgloss.Width(header) - lipgloss.Width(title); space > 4 {
+		header += strings.Repeat(" ", space) + title
 	}
-
-	// Join buttons with separators
-	navSection := strings.Join(buttons, " │ ")
-
-	// App title for right side
-	appTitle := titleStyle.Render("oq - OpenAPI Spec Viewer")
-
-	// Calculate total width for proper spacing
-	navWidth := lipgloss.Width(navSection)
-	titleWidth := lipgloss.Width(appTitle)
-	totalContentWidth := navWidth + titleWidth
-
-	// Create the header line with proper spacing
-	var headerLine string
-	if m.width > totalContentWidth+4 { // 4 for some padding
-		spacingWidth := m.width - totalContentWidth
-		spacing := strings.Repeat(" ", spacingWidth)
-		headerLine = navSection + spacing + appTitle
-	} else {
-		// If not enough space, just show navigation and truncate title if needed
-		headerLine = navSection
-	}
-
-	// Return header with one empty line below
-	return headerLine + "\n\n"
+	return header + "\n\n"
 }
 
 func (m Model) renderFooter() string {
-	schemaInfo := fmt.Sprintf("%s v%s", m.doc.Info.Title, m.doc.Info.Version)
-
-	helpText := "Press '?' for help"
-	if m.showHelp {
-		helpText = ""
+	width := max(1, m.width)
+	schemaInfo := ansi.Truncate(singleLine(m.title), max(0, width-2), "")
+	help := "Press '?' for help"
+	if m.showHelp || lipgloss.Width(help)+lipgloss.Width(schemaInfo)+4 > width {
+		help = ""
 	}
-
-	footerStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color(colorGray)).
-		Foreground(lipgloss.Color(colorFooterText)).
-		Padding(0, 1).
-		Width(m.width).
-		Align(lipgloss.Left)
-
-	schemaWidth := lipgloss.Width(schemaInfo)
-
-	availableWidth := m.width - schemaWidth - 4
-	if lipgloss.Width(helpText) > availableWidth {
-		helpText = ""
-	}
-
-	pad := m.width - lipgloss.Width(helpText) - schemaWidth - 2
-	if pad < 0 {
-		pad = 0
-	}
-
-	footerContent := fmt.Sprintf("%s%s%s",
-		helpText,
-		strings.Repeat(" ", pad),
-		schemaInfo)
-
-	return "\n" + footerStyle.Render(footerContent)
+	padding := max(0, width-2-lipgloss.Width(help)-lipgloss.Width(schemaInfo))
+	style := lipgloss.NewStyle().Background(lipgloss.Color(colorGray)).
+		Foreground(lipgloss.Color(colorFooterText))
+	return "\n" + ansi.Truncate(style.Render(" "+help+strings.Repeat(" ", padding)+schemaInfo+" "), width, "")
 }
 
 func (m Model) renderHelpModal() string {
-	keyStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(colorBlue)).
-		Bold(true)
-
-	textStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(colorWhite))
-
-	helpData := [][]string{
+	keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colorBlue)).Bold(true)
+	rows := [][2]string{
 		{"↑/k", "Move up"},
 		{"↓/j", "Move down"},
 		{"gg", "Move to the top"},
@@ -391,38 +156,12 @@ func (m Model) renderHelpModal() string {
 		{"Esc/q", "Close help"},
 		{"Ctrl+C", "Quit"},
 	}
-
-	// Find max width for first column
-	maxKeyWidth := 0
-	for _, row := range helpData {
-		if len(row[0]) > maxKeyWidth {
-			maxKeyWidth = len(row[0])
-		}
+	var lines []string
+	for _, row := range rows {
+		lines = append(lines, keyStyle.Width(12).Render(row[0])+" "+row[1])
 	}
-
-	var helpItems []string
-	for _, row := range helpData {
-		key := keyStyle.Render(fmt.Sprintf("%-*s", maxKeyWidth, row[0]))
-		desc := textStyle.Render(" " + row[1])
-		helpItems = append(helpItems, key+desc)
-	}
-
-	helpContent := strings.Join(helpItems, "\n")
-
-	modalStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(colorThemePurple)).
-		Padding(1, 2).
-		Width(45)
-
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color(colorThemePurple)).
-		Align(lipgloss.Center).
-		Width(28)
-
-	title := titleStyle.Render("Help")
-	modal := modalStyle.Render(title + "\n\n" + helpContent)
-
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
+	modal := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(colorThemePurple)).Padding(1, 2).
+		Render("Help\n\n" + strings.Join(lines, "\n"))
+	return lipgloss.Place(max(1, m.width), max(1, m.height), lipgloss.Center, lipgloss.Center, modal)
 }
